@@ -232,6 +232,43 @@
             margin-bottom: 20px;
         }
 
+        /* Fullscreen styles for player section */
+        .player-section:fullscreen,
+        .player-section:-webkit-full-screen {
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            border-radius: 0;
+        }
+
+        .player-section:fullscreen .player-header,
+        .player-section:-webkit-full-screen .player-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .player-section:fullscreen:hover .player-header,
+        .player-section:-webkit-full-screen:hover .player-header {
+            opacity: 1;
+        }
+
+        .player-section:fullscreen .player-container,
+        .player-section:-webkit-full-screen .player-container {
+            flex: 1;
+            padding-top: 0;
+            height: 100%;
+        }
+
+        .player-section:fullscreen .fullscreen-controls,
+        .player-section:-webkit-full-screen .fullscreen-controls {
+            display: flex;
+        }
+
         .player-header {
             display: flex;
             justify-content: space-between;
@@ -270,6 +307,11 @@
             font-size: 0.9rem;
         }
 
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
         .player-container {
             position: relative;
             width: 100%;
@@ -296,6 +338,72 @@
 
         .player-wrapper.active {
             display: block;
+        }
+
+        /* Fullscreen controls overlay */
+        .fullscreen-controls {
+            display: none;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 60px 20px 20px 20px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .player-section:fullscreen .player-container:hover .fullscreen-controls,
+        .player-section:-webkit-full-screen .player-container:hover .fullscreen-controls {
+            opacity: 1;
+        }
+
+        .fullscreen-controls .fullscreen-time {
+            font-size: 1.5rem;
+            font-family: monospace;
+            color: #9147ff;
+            font-weight: bold;
+        }
+
+        .fullscreen-controls .fullscreen-vod-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .fullscreen-controls .fs-vod-btn {
+            padding: 8px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            background: rgba(0,0,0,0.5);
+            color: #efeff1;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .fullscreen-controls .fs-vod-btn:hover {
+            border-color: #9147ff;
+            background: rgba(145,71,255,0.3);
+        }
+
+        .fullscreen-controls .fs-vod-btn.active {
+            border-color: #9147ff;
+            background: #9147ff;
+        }
+
+        .fullscreen-controls .swap-info {
+            color: #adadb8;
+            font-size: 0.9rem;
+        }
+
+        .fullscreen-controls .swap-info .timer {
+            color: #9147ff;
+            font-weight: bold;
         }
 
         .controls-section {
@@ -492,6 +600,19 @@
             font-size: 0.85rem;
         }
 
+        .fullscreen-hint {
+            font-size: 0.75rem;
+            color: #848494;
+            margin-left: auto;
+        }
+
+        .fullscreen-hint kbd {
+            background: #3a3a3d;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
         @media (max-width: 900px) {
             .vod-entries-header {
                 display: none;
@@ -514,6 +635,10 @@
             .vod-entry .btn-danger {
                 grid-column: 2;
                 justify-self: end;
+            }
+
+            .fullscreen-hint {
+                display: none;
             }
         }
     </style>
@@ -588,10 +713,25 @@
                     <span id="currentVodLabel"></span>
                     <span class="current-vod-duration" id="currentVodDuration"></span>
                 </div>
-                <button class="btn btn-secondary" onclick="toggleConfig()">⚙️ Config</button>
+                <div class="header-buttons">
+                    <button class="btn btn-secondary" onclick="toggleFullscreen()" title="Toggle Fullscreen (F)">⛶ Fullscreen</button>
+                    <button class="btn btn-secondary" onclick="toggleConfig()">⚙️ Config</button>
+                </div>
             </div>
             <div class="player-container" id="playerContainer">
                 <!-- Players will be created here -->
+
+                <!-- Fullscreen controls overlay -->
+                <div class="fullscreen-controls" id="fullscreenControls">
+                    <div class="fullscreen-time" id="fullscreenTime">00:00:00</div>
+                    <div class="fullscreen-vod-buttons" id="fullscreenVodButtons">
+                        <!-- VOD buttons will be cloned here -->
+                    </div>
+                    <div class="swap-info">
+                        <span id="fullscreenSwapLabel">Next swap:</span>
+                        <span class="timer" id="fullscreenSwapTimer">--</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -607,6 +747,7 @@
                 <div class="vod-buttons" id="vodButtons">
                     <!-- VOD buttons will be added here -->
                 </div>
+                <span class="fullscreen-hint">Press <kbd>F</kbd> for fullscreen</span>
             </div>
 
             <div class="controls-row">
@@ -657,6 +798,7 @@
         let swapCountdown = 0;
         let isPlaying = false;
         let vodCount = 0;
+        let isFullscreen = false;
 
         /**
          * Parse a time string into seconds
@@ -723,6 +865,103 @@
                 addVodEntry();
                 addVodEntry();
             }
+
+            // Set up keyboard shortcuts
+            document.addEventListener('keydown', handleKeyPress);
+
+            // Listen for fullscreen changes
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        }
+
+        function handleKeyPress(e) {
+            // Don't trigger shortcuts when typing in inputs
+            if (e.target.tagName === 'INPUT') return;
+
+            switch(e.key.toLowerCase()) {
+                case 'f':
+                    toggleFullscreen();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    togglePlayPause();
+                    break;
+                case 'arrowleft':
+                    seekRelative(-10);
+                    break;
+                case 'arrowright':
+                    seekRelative(10);
+                    break;
+                case 'escape':
+                    if (isFullscreen) {
+                        exitFullscreen();
+                    }
+                    break;
+            }
+
+            // Number keys 1-9 to switch VODs
+            if (e.key >= '1' && e.key <= '9') {
+                const index = parseInt(e.key) - 1;
+                if (index < vods.length) {
+                    switchToVod(index);
+                }
+            }
+        }
+
+        function handleFullscreenChange() {
+            isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            updateFullscreenControls();
+        }
+
+        function toggleFullscreen() {
+            const playerSection = document.getElementById('playerSection');
+
+            if (!isFullscreen) {
+                if (playerSection.requestFullscreen) {
+                    playerSection.requestFullscreen();
+                } else if (playerSection.webkitRequestFullscreen) {
+                    playerSection.webkitRequestFullscreen();
+                }
+            } else {
+                exitFullscreen();
+            }
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+
+        function updateFullscreenControls() {
+            if (isFullscreen) {
+                createFullscreenVodButtons();
+            }
+        }
+
+        function createFullscreenVodButtons() {
+            const container = document.getElementById('fullscreenVodButtons');
+            container.innerHTML = '';
+
+            vods.forEach((vod, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'fs-vod-btn' + (i === currentVodIndex ? ' active' : '');
+                btn.id = `fs-vod-btn-${i}`;
+                btn.textContent = vod.label;
+                btn.onclick = () => switchToVod(i);
+                container.appendChild(btn);
+            });
+        }
+
+        function updateFullscreenVodButtons() {
+            vods.forEach((vod, i) => {
+                const btn = document.getElementById(`fs-vod-btn-${i}`);
+                if (btn) {
+                    btn.classList.toggle('active', i === currentVodIndex);
+                }
+            });
         }
 
         function loadFromUrl(params) {
@@ -858,7 +1097,11 @@
 
         function createPlayers() {
             const container = document.getElementById('playerContainer');
-            container.innerHTML = '';
+
+            // Remove old player wrappers but keep fullscreen controls
+            const oldWrappers = container.querySelectorAll('.player-wrapper');
+            oldWrappers.forEach(w => w.remove());
+
             players = [];
             playerReady = [];
             pendingSwitch = null;
@@ -867,7 +1110,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'player-wrapper' + (i === 0 ? ' active' : '');
                 wrapper.id = `player-wrapper-${i}`;
-                container.appendChild(wrapper);
+                container.insertBefore(wrapper, document.getElementById('fullscreenControls'));
 
                 playerReady.push(false);
 
@@ -967,6 +1210,7 @@
 
             currentVodIndex = index;
             updateCurrentVodDisplay();
+            updateFullscreenVodButtons();
 
             if (playerReady[index]) {
                 completeSwitchToVod(index, switchMasterTime);
@@ -1074,7 +1318,10 @@
                 } catch (e) {
                     // Player might not be ready
                 }
-                document.getElementById('masterTimeDisplay').textContent = formatTimeDisplay(Math.max(0, masterTime));
+
+                const timeStr = formatTimeDisplay(Math.max(0, masterTime));
+                document.getElementById('masterTimeDisplay').textContent = timeStr;
+                document.getElementById('fullscreenTime').textContent = timeStr;
             }, 500);
         }
 
@@ -1085,6 +1332,11 @@
             } else {
                 stopAutoSwap();
             }
+        }
+
+        function updateSwapTimerDisplay(text) {
+            document.getElementById('swapTimer').textContent = text;
+            document.getElementById('fullscreenSwapTimer').textContent = text;
         }
 
         function startAutoSwap() {
@@ -1102,13 +1354,13 @@
             }
 
             swapCountdown = currentDuration;
-            document.getElementById('swapTimer').textContent = formatCountdown(swapCountdown);
+            updateSwapTimerDisplay(formatCountdown(swapCountdown));
 
             swapTimerInterval = setInterval(() => {
                 if (!isPlaying) return;
 
                 swapCountdown--;
-                document.getElementById('swapTimer').textContent = formatCountdown(swapCountdown);
+                updateSwapTimerDisplay(formatCountdown(swapCountdown));
 
                 if (swapCountdown <= 0) {
                     const nextIndex = findNextVodIndex();
@@ -1126,19 +1378,19 @@
                 clearInterval(swapTimerInterval);
                 swapTimerInterval = null;
             }
-            document.getElementById('swapTimer').textContent = '--';
+            updateSwapTimerDisplay('--');
         }
 
         function resetSwapTimer() {
             const currentDuration = getEffectiveDuration(vods[currentVodIndex]);
 
             if (currentDuration === 0) {
-                document.getElementById('swapTimer').textContent = 'Skip';
+                updateSwapTimerDisplay('Skip');
                 return;
             }
 
             swapCountdown = currentDuration;
-            document.getElementById('swapTimer').textContent = formatCountdown(swapCountdown);
+            updateSwapTimerDisplay(formatCountdown(swapCountdown));
 
             if (autoSwapEnabled && swapTimerInterval) {
                 clearInterval(swapTimerInterval);
@@ -1146,7 +1398,7 @@
                     if (!isPlaying) return;
 
                     swapCountdown--;
-                    document.getElementById('swapTimer').textContent = formatCountdown(swapCountdown);
+                    updateSwapTimerDisplay(formatCountdown(swapCountdown));
 
                     if (swapCountdown <= 0) {
                         const nextIndex = findNextVodIndex();
