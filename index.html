@@ -90,7 +90,7 @@
 
         .vod-entries-header {
             display: grid;
-            grid-template-columns: 28px 2fr 120px 120px 140px 44px;
+            grid-template-columns: 28px 2fr 130px 130px 140px 44px;
             gap: 10px;
             padding: 0 10px 8px 10px;
             font-size: 0.8rem;
@@ -105,7 +105,7 @@
 
         .vod-entry {
             display: grid;
-            grid-template-columns: 28px 2fr 120px 120px 140px 44px;
+            grid-template-columns: 28px 2fr 130px 130px 140px 44px;
             gap: 10px;
             margin-bottom: 10px;
             align-items: center;
@@ -168,6 +168,17 @@
             border-radius: 3px;
             font-family: monospace;
             color: #efeff1;
+        }
+
+        .format-examples {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #3a3a3d;
+        }
+
+        .format-examples .format-title {
+            color: #bf94ff;
+            margin-bottom: 4px;
         }
 
         .btn {
@@ -441,7 +452,7 @@
         }
 
         .seek-controls input {
-            width: 120px;
+            width: 140px;
             padding: 8px;
             border: 1px solid #3a3a3d;
             border-radius: 4px;
@@ -492,16 +503,25 @@
 
             <div class="vod-input-hints">
                 <strong>VOD ID:</strong> The numeric ID from the Twitch VOD URL. Example: <code>twitch.tv/videos/<strong>2345678901</strong></code> → enter <code>2345678901</code><br>
-                <strong>Offset:</strong> Time adjustment in seconds. Use <code>0</code> for the reference VOD, positive values if the VOD starts later, negative if it starts earlier.<br>
-                <strong>Duration:</strong> How long to watch this VOD before auto-swapping (in seconds). Leave empty to use default. Use <code>0</code> to skip this VOD in rotation.<br>
+                <strong>Offset:</strong> Time adjustment to sync VODs. Use <code>0</code> for the reference VOD. Positive if this VOD starts later, negative (prefix with <code>-</code>) if it starts earlier.<br>
+                <strong>Duration:</strong> How long to watch this VOD before auto-swapping. Leave empty to use default. Use <code>0</code> to skip this VOD in rotation.<br>
                 <strong>Label:</strong> A friendly name to identify each stream (e.g., streamer name).
+
+                <div class="format-examples">
+                    <div class="format-title">⏱️ Supported Time Formats (for Offset, Duration, Start Time):</div>
+                    <code>90</code> = 90 seconds &nbsp;|&nbsp;
+                    <code>1:30</code> = 1 min 30 sec &nbsp;|&nbsp;
+                    <code>1:25:03</code> = 1 hr 25 min 3 sec &nbsp;|&nbsp;
+                    <code>-45</code> = negative 45 sec &nbsp;|&nbsp;
+                    <code>-1:30:00</code> = negative 1 hr 30 min
+                </div>
             </div>
 
             <div class="vod-entries-header">
                 <span>#</span>
                 <span>VOD ID</span>
-                <span>Offset (sec)</span>
-                <span>Duration (sec)</span>
+                <span>Offset</span>
+                <span>Duration</span>
                 <span>Label</span>
                 <span></span>
             </div>
@@ -516,14 +536,14 @@
 
             <div class="config-row">
                 <div class="config-group">
-                    <label>Default Swap Duration (seconds)</label>
-                    <input type="number" id="defaultDuration" value="300" min="0" max="36000" placeholder="e.g., 300">
-                    <div class="hint">Default time per VOD when no individual duration is set. 300 = 5 minutes. Use <code>0</code> for no auto-swap.</div>
+                    <label>Default Swap Duration</label>
+                    <input type="text" id="defaultDuration" value="5:00" placeholder="e.g., 5:00 or 300">
+                    <div class="hint">Default time per VOD when no individual duration is set. Supports time formats: <code>5:00</code> = 5 min, <code>300</code> = 300 sec.</div>
                 </div>
                 <div class="config-group">
-                    <label>Start Time (seconds)</label>
-                    <input type="number" id="startTime" value="0" min="0" placeholder="e.g., 0 or 3600">
-                    <div class="hint">Master timeline start position in seconds. Use <code>0</code> to start from the beginning, or enter seconds to skip ahead (e.g., <code>3600</code> = 1 hour in).</div>
+                    <label>Start Time</label>
+                    <input type="text" id="startTime" value="0" placeholder="e.g., 0 or 1:30:00">
+                    <div class="hint">Master timeline start position. Use <code>0</code> to start from the beginning, or a time like <code>1:30:00</code> to skip ahead.</div>
                 </div>
             </div>
 
@@ -569,7 +589,7 @@
                     <button class="btn btn-secondary" onclick="togglePlayPause()">⏯️ Play/Pause</button>
                     <button class="btn btn-secondary" onclick="seekRelative(10)">+10s ⏩</button>
                     <button class="btn btn-secondary" onclick="seekRelative(30)">+30s ⏩</button>
-                    <input type="number" id="seekToTime" placeholder="Seconds (e.g., 3600)">
+                    <input type="text" id="seekToTime" placeholder="e.g., 1:30:00">
                     <button class="btn btn-secondary" onclick="seekToMasterTime()">Go</button>
                 </div>
             </div>
@@ -609,6 +629,74 @@
         let isPlaying = false;
         let vodCount = 0;
 
+        /**
+         * Parse a time string into seconds
+         * Supports formats:
+         *   - Plain number: "90" -> 90 seconds
+         *   - MM:SS: "1:30" -> 90 seconds
+         *   - HH:MM:SS: "1:25:03" -> 5103 seconds
+         *   - Negative values: "-1:30" -> -90 seconds
+         */
+        function parseTime(input) {
+            if (input === null || input === undefined) return null;
+
+            const str = String(input).trim();
+            if (str === '') return null;
+
+            // Check for negative
+            const isNegative = str.startsWith('-');
+            const cleanStr = isNegative ? str.substring(1) : str;
+
+            let seconds = 0;
+
+            if (cleanStr.includes(':')) {
+                // Time format: could be MM:SS or HH:MM:SS
+                const parts = cleanStr.split(':').map(p => parseFloat(p) || 0);
+
+                if (parts.length === 2) {
+                    // MM:SS
+                    seconds = parts[0] * 60 + parts[1];
+                } else if (parts.length === 3) {
+                    // HH:MM:SS
+                    seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                } else {
+                    // Invalid format, try to parse as plain number
+                    seconds = parseFloat(cleanStr) || 0;
+                }
+            } else {
+                // Plain seconds
+                seconds = parseFloat(cleanStr) || 0;
+            }
+
+            return isNegative ? -seconds : seconds;
+        }
+
+        /**
+         * Format seconds into a readable time string
+         * Outputs HH:MM:SS or MM:SS depending on length
+         */
+        function formatTimeReadable(seconds) {
+            if (seconds === null || seconds === undefined) return '';
+
+            const isNegative = seconds < 0;
+            const absSeconds = Math.abs(seconds);
+
+            const h = Math.floor(absSeconds / 3600);
+            const m = Math.floor((absSeconds % 3600) / 60);
+            const s = Math.floor(absSeconds % 60);
+
+            let result;
+            if (h > 0) {
+                result = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            } else if (m > 0) {
+                result = `${m}:${s.toString().padStart(2, '0')}`;
+            } else {
+                result = `${s}`;
+            }
+
+            return isNegative ? `-${result}` : result;
+        }
+
         // Initialize from URL params or with default entries
         function init() {
             const params = new URLSearchParams(window.location.search);
@@ -623,29 +711,31 @@
 
         function loadFromUrl(params) {
             const vodIds = params.get('vods')?.split(',') || [];
-            const offsets = params.get('offsets')?.split(',').map(Number) || [];
-            const durations = params.get('durations')?.split(',').map(s => s === '' ? null : Number(s)) || [];
+            const offsets = params.get('offsets')?.split(',') || [];
+            const durations = params.get('durations')?.split(',') || [];
             const labels = params.get('labels')?.split(',').map(decodeURIComponent) || [];
-            const defaultDur = parseInt(params.get('default')) || 300;
-            const start = parseInt(params.get('start')) || 0;
+            const defaultDur = params.get('default') || '5:00';
+            const start = params.get('start') || '0';
             const autoSwap = params.get('autoswap') === '1';
 
             document.getElementById('defaultDuration').value = defaultDur;
             document.getElementById('startTime').value = start;
 
             vodIds.forEach((id, i) => {
-                addVodEntry(id, offsets[i] || 0, durations[i], labels[i] || `VOD ${i + 1}`);
+                const offsetVal = offsets[i] || '0';
+                const durationVal = durations[i] || '';
+                addVodEntry(id, offsetVal, durationVal, labels[i] || `VOD ${i + 1}`);
             });
 
             if (vodIds.length > 0) {
-                defaultDuration = defaultDur;
-                masterTime = start;
+                defaultDuration = parseTime(defaultDur) || 300;
+                masterTime = parseTime(start) || 0;
                 autoSwapEnabled = autoSwap;
                 startPlayer();
             }
         }
 
-        function addVodEntry(vodId = '', offset = 0, duration = null, label = '') {
+        function addVodEntry(vodId = '', offset = '0', duration = '', label = '') {
             vodCount++;
             const container = document.getElementById('vodEntries');
             const entry = document.createElement('div');
@@ -654,17 +744,20 @@
 
             const offsetPlaceholder = vodCount === 1 
                 ? "0 (reference)" 
-                : "e.g., 45 or -30";
+                : "e.g., 1:25:03";
 
             const labelPlaceholder = `e.g., Streamer${vodCount}`;
-            const durationValue = duration !== null ? duration : '';
             const durationPlaceholder = "empty = default";
+
+            // Format offset for display if it's a number from URL
+            const offsetDisplay = typeof offset === 'number' ? formatTimeReadable(offset) : offset;
+            const durationDisplay = typeof duration === 'number' ? formatTimeReadable(duration) : duration;
 
             entry.innerHTML = `
                 <span class="vod-number">${vodCount}</span>
                 <input type="text" class="vod-id" placeholder="e.g., 2345678901" value="${vodId}" title="Numeric VOD ID from twitch.tv/videos/[ID]">
-                <input type="text" class="vod-offset" placeholder="${offsetPlaceholder}" value="${offset}" title="Offset in seconds: 0 for reference, positive if this VOD starts later, negative if earlier">
-                <input type="text" class="vod-duration" placeholder="${durationPlaceholder}" value="${durationValue}" title="Duration in seconds before swapping. Empty = use default. 0 = skip in rotation.">
+                <input type="text" class="vod-offset" placeholder="${offsetPlaceholder}" value="${offsetDisplay}" title="Time offset. Formats: 90, 1:30, 1:25:03, -45, -1:30:00">
+                <input type="text" class="vod-duration" placeholder="${durationPlaceholder}" value="${durationDisplay}" title="Duration before swap. Formats: 90, 5:00, 1:00:00. Empty=default, 0=skip">
                 <input type="text" class="vod-label" placeholder="${labelPlaceholder}" value="${label}" title="Display name for this VOD">
                 <button class="btn btn-danger" onclick="removeVodEntry(this)" title="Remove this VOD">✕</button>
             `;
@@ -681,7 +774,6 @@
             const entries = document.querySelectorAll('.vod-entry');
             entries.forEach((entry, i) => {
                 entry.querySelector('.vod-number').textContent = i + 1;
-                // Update placeholder for first entry
                 const offsetInput = entry.querySelector('.vod-offset');
                 if (i === 0 && !offsetInput.value) {
                     offsetInput.placeholder = "0 (reference)";
@@ -695,12 +787,22 @@
             const config = [];
             entries.forEach((entry, i) => {
                 const vodId = entry.querySelector('.vod-id').value.trim();
-                const offset = parseFloat(entry.querySelector('.vod-offset').value) || 0;
-                const durationInput = entry.querySelector('.vod-duration').value.trim();
-                const duration = durationInput === '' ? null : parseFloat(durationInput);
+                const offsetRaw = entry.querySelector('.vod-offset').value.trim();
+                const durationRaw = entry.querySelector('.vod-duration').value.trim();
+                const offset = parseTime(offsetRaw) || 0;
+                const duration = durationRaw === '' ? null : (parseTime(durationRaw) ?? null);
                 const label = entry.querySelector('.vod-label').value.trim() || `VOD ${i + 1}`;
+
+                // Store raw values for URL generation
                 if (vodId) {
-                    config.push({ vodId, offset, duration, label });
+                    config.push({ 
+                        vodId, 
+                        offset, 
+                        duration, 
+                        label,
+                        offsetRaw: offsetRaw || '0',
+                        durationRaw: durationRaw
+                    });
                 }
             });
             return config;
@@ -713,14 +815,10 @@
             return defaultDuration;
         }
 
-        function formatDuration(seconds) {
+        function formatDurationDisplay(seconds) {
             if (seconds === 0) return 'Skip';
-            if (seconds >= 60) {
-                const mins = Math.floor(seconds / 60);
-                const secs = seconds % 60;
-                return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-            }
-            return `${seconds}s`;
+            if (seconds === null) return formatTimeReadable(defaultDuration);
+            return formatTimeReadable(seconds);
         }
 
         function startPlayer() {
@@ -731,8 +829,8 @@
                 return;
             }
 
-            defaultDuration = parseInt(document.getElementById('defaultDuration').value) || 300;
-            masterTime = parseInt(document.getElementById('startTime').value) || 0;
+            defaultDuration = parseTime(document.getElementById('defaultDuration').value) || 300;
+            masterTime = parseTime(document.getElementById('startTime').value) || 0;
 
             document.getElementById('configPanel').classList.add('hidden');
             document.getElementById('playerSection').classList.remove('hidden');
@@ -794,9 +892,10 @@
                 const btn = document.createElement('button');
                 btn.className = 'vod-btn' + (i === 0 ? ' active' : '');
                 const effectiveDuration = getEffectiveDuration(vod);
+                const durationText = effectiveDuration === 0 ? 'Skip' : formatTimeReadable(effectiveDuration);
                 btn.innerHTML = `
                     <span>${vod.label}</span>
-                    <span class="vod-btn-duration">${formatDuration(effectiveDuration)}</span>
+                    <span class="vod-btn-duration">${durationText}</span>
                 `;
                 btn.onclick = () => switchToVod(i);
                 container.appendChild(btn);
@@ -806,7 +905,6 @@
         function switchToVod(index) {
             if (index === currentVodIndex || index >= players.length) return;
 
-            // Get current master time from active player
             const currentPlayer = players[currentVodIndex];
             const currentVodOffset = vods[currentVodIndex].offset;
 
@@ -817,15 +915,12 @@
                 console.log('Could not get current time, using tracked master time');
             }
 
-            // Pause and mute current
             currentPlayer.pause();
             currentPlayer.setMuted(true);
 
-            // Hide current wrapper, show new wrapper
             document.querySelectorAll('.player-wrapper').forEach(w => w.classList.remove('active'));
             document.getElementById(`player-wrapper-${index}`).classList.add('active');
 
-            // Seek and play new VOD
             const newPlayer = players[index];
             const newOffset = vods[index].offset;
             const newTime = masterTime + newOffset;
@@ -843,7 +938,6 @@
         }
 
         function findNextVodIndex() {
-            // Find the next VOD that has duration > 0 (not skipped)
             let nextIndex = (currentVodIndex + 1) % vods.length;
             let checked = 0;
 
@@ -856,7 +950,6 @@
                 checked++;
             }
 
-            // All VODs are skipped or only one VOD
             return null;
         }
 
@@ -865,7 +958,9 @@
             document.getElementById('currentVodLabel').textContent = vods[currentVodIndex]?.label || '';
 
             const effectiveDuration = getEffectiveDuration(vods[currentVodIndex]);
-            const durationText = effectiveDuration === 0 ? '(Skip in rotation)' : `(${formatDuration(effectiveDuration)} per swap)`;
+            const durationText = effectiveDuration === 0 
+                ? '(Skip in rotation)' 
+                : `(${formatTimeReadable(effectiveDuration)} per swap)`;
             document.getElementById('currentVodDuration').textContent = durationText;
 
             document.querySelectorAll('.vod-btn').forEach((btn, i) => {
@@ -874,9 +969,9 @@
         }
 
         function formatTimeForTwitch(seconds) {
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = Math.floor(seconds % 60);
+            const h = Math.floor(Math.abs(seconds) / 3600);
+            const m = Math.floor((Math.abs(seconds) % 3600) / 60);
+            const s = Math.floor(Math.abs(seconds) % 60);
             return `${h}h${m}m${s}s`;
         }
 
@@ -888,7 +983,12 @@
         }
 
         function formatCountdown(seconds) {
-            if (seconds >= 60) {
+            if (seconds >= 3600) {
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = seconds % 60;
+                return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            } else if (seconds >= 60) {
                 const mins = Math.floor(seconds / 60);
                 const secs = seconds % 60;
                 return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -930,7 +1030,6 @@
             const currentDuration = getEffectiveDuration(vods[currentVodIndex]);
 
             if (currentDuration === 0) {
-                // Skip this VOD immediately
                 const nextIndex = findNextVodIndex();
                 if (nextIndex !== null && nextIndex !== currentVodIndex) {
                     switchToVod(nextIndex);
@@ -952,7 +1051,6 @@
                     if (nextIndex !== null && nextIndex !== currentVodIndex) {
                         switchToVod(nextIndex);
                     } else {
-                        // Only one VOD or all others skipped - just reset timer
                         resetSwapTimer();
                     }
                 }
@@ -978,7 +1076,6 @@
             swapCountdown = currentDuration;
             document.getElementById('swapTimer').textContent = formatCountdown(swapCountdown);
 
-            // Restart interval if auto-swap is enabled
             if (autoSwapEnabled && swapTimerInterval) {
                 clearInterval(swapTimerInterval);
                 swapTimerInterval = setInterval(() => {
@@ -1010,8 +1107,8 @@
 
         function seekToMasterTime() {
             const input = document.getElementById('seekToTime');
-            const newTime = parseInt(input.value);
-            if (!isNaN(newTime) && newTime >= 0) {
+            const newTime = parseTime(input.value);
+            if (newTime !== null && newTime >= 0) {
                 masterTime = newTime;
                 const currentPlayer = players[currentVodIndex];
                 currentPlayer.seek(masterTime + vods[currentVodIndex].offset);
@@ -1044,8 +1141,8 @@
 
             const params = new URLSearchParams();
             params.set('vods', config.map(v => v.vodId).join(','));
-            params.set('offsets', config.map(v => v.offset).join(','));
-            params.set('durations', config.map(v => v.duration !== null ? v.duration : '').join(','));
+            params.set('offsets', config.map(v => v.offsetRaw).join(','));
+            params.set('durations', config.map(v => v.durationRaw).join(','));
             params.set('labels', config.map(v => encodeURIComponent(v.label)).join(','));
             params.set('default', document.getElementById('defaultDuration').value);
             params.set('start', document.getElementById('startTime').value);
