@@ -646,8 +646,8 @@
         // State
         let vods = [];
         let players = [];
-        let playerReady = [];  // Track ready state for each player
-        let pendingSwitch = null;  // Queue for pending switch if player not ready
+        let playerReady = [];
+        let pendingSwitch = null;
         let currentVodIndex = 0;
         let masterTime = 0;
         let defaultDuration = 300;
@@ -860,8 +860,8 @@
             const container = document.getElementById('playerContainer');
             container.innerHTML = '';
             players = [];
-            playerReady = [];  // Reset ready states
-            pendingSwitch = null;  // Clear any pending switch
+            playerReady = [];
+            pendingSwitch = null;
 
             vods.forEach((vod, i) => {
                 const wrapper = document.createElement('div');
@@ -869,7 +869,7 @@
                 wrapper.id = `player-wrapper-${i}`;
                 container.appendChild(wrapper);
 
-                playerReady.push(false);  // Initially not ready
+                playerReady.push(false);
 
                 const player = new Twitch.Player(`player-wrapper-${i}`, {
                     video: vod.vodId,
@@ -884,17 +884,14 @@
                     playerReady[i] = true;
                     updateVodButtonReadyState(i, true);
 
-                    // Check if there's a pending switch to this player
                     if (pendingSwitch && pendingSwitch.index === i) {
                         completeSwitchToVod(pendingSwitch.index, pendingSwitch.masterTimeAtSwitch);
                         pendingSwitch = null;
                     } else if (i === 0) {
-                        // First player - start playback
                         player.seek(masterTime + vod.offset);
                         player.play();
                         isPlaying = true;
                     } else {
-                        // Secondary player with no pending switch - keep paused
                         player.pause();
                     }
                 });
@@ -916,7 +913,6 @@
                 const effectiveDuration = getEffectiveDuration(vod);
                 const durationText = effectiveDuration === 0 ? 'Skip' : formatTimeReadable(effectiveDuration);
 
-                // Add ready indicator dot
                 const readyClass = playerReady[i] ? 'ready' : '';
                 btn.innerHTML = `
                     <span class="ready-indicator ${readyClass}"></span>
@@ -952,7 +948,6 @@
         function switchToVod(index) {
             if (index === currentVodIndex || index >= players.length) return;
 
-            // Get current master time from active player
             const currentPlayer = players[currentVodIndex];
             const currentVodOffset = vods[currentVodIndex].offset;
 
@@ -964,23 +959,18 @@
                 console.log('Could not get current time, using tracked master time');
             }
 
-            // Pause and mute current player
             currentPlayer.pause();
             currentPlayer.setMuted(true);
 
-            // Hide current wrapper, show new wrapper
             document.querySelectorAll('.player-wrapper').forEach(w => w.classList.remove('active'));
             document.getElementById(`player-wrapper-${index}`).classList.add('active');
 
-            // Update current index for UI
             currentVodIndex = index;
             updateCurrentVodDisplay();
 
             if (playerReady[index]) {
-                // Player is ready - complete switch immediately
                 completeSwitchToVod(index, switchMasterTime);
             } else {
-                // Player not ready - queue the switch and show loading
                 pendingSwitch = { index, masterTimeAtSwitch: switchMasterTime };
                 setLoadingState(true);
                 showStatus('Waiting for player to load...', 'success');
@@ -999,9 +989,11 @@
             newPlayer.seek(newTime);
             newPlayer.setMuted(false);
 
-            if (isPlaying) {
+            // Small delay to allow seek to process, then always play
+            setTimeout(() => {
                 newPlayer.play();
-            }
+                isPlaying = true;
+            }, 150);
 
             resetSwapTimer();
         }
@@ -1024,7 +1016,6 @@
 
         function updateCurrentVodDisplay() {
             const badge = document.getElementById('currentVodBadge');
-            // Only update if not in loading state
             if (!badge.classList.contains('loading')) {
                 badge.textContent = `VOD ${currentVodIndex + 1}`;
             }
