@@ -347,20 +347,27 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
             padding: 60px 20px 20px 20px;
             z-index: 100;
             opacity: 0;
             transition: opacity 0.3s;
-            flex-wrap: wrap;
-            gap: 15px;
+            flex-direction: column;
+            gap: 12px;
             align-items: center;
-            justify-content: center;
         }
 
         .player-section:fullscreen .player-container:hover .fullscreen-controls,
         .player-section:-webkit-full-screen .player-container:hover .fullscreen-controls {
             opacity: 1;
+        }
+
+        .fullscreen-controls .fullscreen-main-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .fullscreen-controls .fullscreen-time {
@@ -404,6 +411,40 @@
         .fullscreen-controls .swap-info .timer {
             color: #9147ff;
             font-weight: bold;
+        }
+
+        .fullscreen-controls .fs-offset-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .fullscreen-controls .fs-offset-row span {
+            color: #adadb8;
+        }
+
+        .fullscreen-controls .fs-offset-row .fs-offset-value {
+            color: #bf94ff;
+            font-family: monospace;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .fullscreen-controls .fs-offset-btn {
+            padding: 5px 10px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            background: rgba(0,0,0,0.5);
+            color: #efeff1;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .fullscreen-controls .fs-offset-btn:hover {
+            border-color: #9147ff;
+            background: rgba(145,71,255,0.3);
         }
 
         .controls-section {
@@ -475,6 +516,112 @@
 
         .vod-btn .ready-indicator.ready {
             background: #4ade80;
+        }
+
+        .offset-adjust-section {
+            background: #0e0e10;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #3a3a3d;
+        }
+
+        .offset-adjust-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .offset-adjust-title {
+            font-size: 0.9rem;
+            color: #bf94ff;
+        }
+
+        .offset-adjust-title .vod-name {
+            color: #efeff1;
+            font-weight: 600;
+        }
+
+        .offset-current {
+            font-family: monospace;
+            font-size: 1.1rem;
+            color: #9147ff;
+            background: #18181b;
+            padding: 5px 12px;
+            border-radius: 4px;
+        }
+
+        .offset-adjust-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .offset-btn-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .offset-btn {
+            padding: 8px 12px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #18181b;
+            color: #efeff1;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: monospace;
+            transition: all 0.2s;
+        }
+
+        .offset-btn:hover {
+            border-color: #9147ff;
+            background: #2a2a2d;
+        }
+
+        .offset-btn.negative {
+            color: #f87171;
+        }
+
+        .offset-btn.positive {
+            color: #4ade80;
+        }
+
+        .offset-divider {
+            width: 1px;
+            height: 30px;
+            background: #3a3a3d;
+            margin: 0 8px;
+        }
+
+        .offset-input-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .offset-input-group input {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #18181b;
+            color: #efeff1;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .offset-input-group input:focus {
+            outline: none;
+            border-color: #9147ff;
+        }
+
+        .offset-help {
+            font-size: 0.75rem;
+            color: #848494;
+            margin-top: 10px;
         }
 
         .auto-swap-controls {
@@ -640,6 +787,14 @@
             .fullscreen-hint {
                 display: none;
             }
+
+            .offset-divider {
+                display: none;
+            }
+
+            .offset-adjust-controls {
+                justify-content: center;
+            }
         }
     </style>
 </head>
@@ -723,13 +878,23 @@
 
                 <!-- Fullscreen controls overlay -->
                 <div class="fullscreen-controls" id="fullscreenControls">
-                    <div class="fullscreen-time" id="fullscreenTime">00:00:00</div>
-                    <div class="fullscreen-vod-buttons" id="fullscreenVodButtons">
-                        <!-- VOD buttons will be cloned here -->
+                    <div class="fullscreen-main-row">
+                        <div class="fullscreen-time" id="fullscreenTime">00:00:00</div>
+                        <div class="fullscreen-vod-buttons" id="fullscreenVodButtons">
+                            <!-- VOD buttons will be cloned here -->
+                        </div>
+                        <div class="swap-info">
+                            <span id="fullscreenSwapLabel">Next swap:</span>
+                            <span class="timer" id="fullscreenSwapTimer">--</span>
+                        </div>
                     </div>
-                    <div class="swap-info">
-                        <span id="fullscreenSwapLabel">Next swap:</span>
-                        <span class="timer" id="fullscreenSwapTimer">--</span>
+                    <div class="fs-offset-row">
+                        <span>Offset:</span>
+                        <button class="fs-offset-btn" onclick="adjustOffset(-1)">-1s</button>
+                        <button class="fs-offset-btn" onclick="adjustOffset(-0.1)">-0.1s</button>
+                        <span class="fs-offset-value" id="fsOffsetValue">0s</span>
+                        <button class="fs-offset-btn" onclick="adjustOffset(0.1)">+0.1s</button>
+                        <button class="fs-offset-btn" onclick="adjustOffset(1)">+1s</button>
                     </div>
                 </div>
             </div>
@@ -748,6 +913,39 @@
                     <!-- VOD buttons will be added here -->
                 </div>
                 <span class="fullscreen-hint">Press <kbd>F</kbd> for fullscreen</span>
+            </div>
+
+            <!-- Offset Adjustment Section -->
+            <div class="offset-adjust-section" id="offsetAdjustSection">
+                <div class="offset-adjust-header">
+                    <div class="offset-adjust-title">
+                        🔧 Fine-tune offset for: <span class="vod-name" id="offsetVodName">VOD 1</span>
+                    </div>
+                    <div class="offset-current" id="offsetCurrentValue">0s</div>
+                </div>
+                <div class="offset-adjust-controls">
+                    <div class="offset-btn-group">
+                        <button class="offset-btn negative" onclick="adjustOffset(-5)">-5s</button>
+                        <button class="offset-btn negative" onclick="adjustOffset(-1)">-1s</button>
+                        <button class="offset-btn negative" onclick="adjustOffset(-0.1)">-0.1s</button>
+                    </div>
+                    <div class="offset-divider"></div>
+                    <div class="offset-btn-group">
+                        <button class="offset-btn positive" onclick="adjustOffset(0.1)">+0.1s</button>
+                        <button class="offset-btn positive" onclick="adjustOffset(1)">+1s</button>
+                        <button class="offset-btn positive" onclick="adjustOffset(5)">+5s</button>
+                    </div>
+                    <div class="offset-divider"></div>
+                    <div class="offset-input-group">
+                        <input type="text" id="offsetDirectInput" placeholder="e.g., -2:30">
+                        <button class="btn btn-secondary" onclick="setOffsetDirect()" style="padding: 8px 12px;">Set</button>
+                    </div>
+                </div>
+                <div class="offset-help">
+                    💡 <strong>This VOD ahead?</strong> Use negative (-) to seek earlier. 
+                    <strong>This VOD behind?</strong> Use positive (+) to seek later. 
+                    Changes are saved when you regenerate the share URL.
+                </div>
             </div>
 
             <div class="controls-row">
@@ -842,15 +1040,18 @@
 
             const h = Math.floor(absSeconds / 3600);
             const m = Math.floor((absSeconds % 3600) / 60);
-            const s = Math.floor(absSeconds % 60);
+            const s = absSeconds % 60;
+
+            // Handle decimal seconds
+            const sDisplay = s % 1 === 0 ? Math.floor(s) : s.toFixed(1);
 
             let result;
             if (h > 0) {
-                result = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                result = `${h}:${m.toString().padStart(2, '0')}:${sDisplay.toString().padStart(2, '0')}`;
             } else if (m > 0) {
-                result = `${m}:${s.toString().padStart(2, '0')}`;
+                result = `${m}:${sDisplay.toString().padStart(2, '0')}`;
             } else {
-                result = `${s}`;
+                result = `${sDisplay}s`;
             }
 
             return isNegative ? `-${result}` : result;
@@ -897,6 +1098,18 @@
                         exitFullscreen();
                     }
                     break;
+                case '[':
+                    adjustOffset(-1);
+                    break;
+                case ']':
+                    adjustOffset(1);
+                    break;
+                case '{':
+                    adjustOffset(-0.1);
+                    break;
+                case '}':
+                    adjustOffset(0.1);
+                    break;
             }
 
             // Number keys 1-9 to switch VODs
@@ -938,6 +1151,7 @@
         function updateFullscreenControls() {
             if (isFullscreen) {
                 createFullscreenVodButtons();
+                updateOffsetDisplay();
             }
         }
 
@@ -1085,6 +1299,7 @@
 
             createPlayers();
             createVodButtons();
+            updateOffsetDisplay();
 
             document.getElementById('autoSwapEnabled').checked = autoSwapEnabled;
 
@@ -1211,6 +1426,7 @@
             currentVodIndex = index;
             updateCurrentVodDisplay();
             updateFullscreenVodButtons();
+            updateOffsetDisplay();
 
             if (playerReady[index]) {
                 completeSwitchToVod(index, switchMasterTime);
@@ -1274,6 +1490,72 @@
             document.querySelectorAll('.vod-btn').forEach((btn, i) => {
                 btn.classList.toggle('active', i === currentVodIndex);
             });
+        }
+
+        function updateOffsetDisplay() {
+            const currentVod = vods[currentVodIndex];
+            if (!currentVod) return;
+
+            const offsetValue = formatTimeReadable(currentVod.offset);
+
+            // Update main controls
+            document.getElementById('offsetVodName').textContent = currentVod.label;
+            document.getElementById('offsetCurrentValue').textContent = offsetValue;
+
+            // Update fullscreen controls
+            document.getElementById('fsOffsetValue').textContent = offsetValue;
+        }
+
+        function adjustOffset(delta) {
+            if (!vods[currentVodIndex]) return;
+
+            // Update the offset
+            vods[currentVodIndex].offset += delta;
+            vods[currentVodIndex].offsetRaw = formatTimeReadable(vods[currentVodIndex].offset);
+
+            // Seek current player to new position based on master time
+            const currentPlayer = players[currentVodIndex];
+            const newTime = masterTime + vods[currentVodIndex].offset;
+            currentPlayer.seek(Math.max(0, newTime));
+
+            // Update display
+            updateOffsetDisplay();
+
+            // Show brief feedback
+            const direction = delta > 0 ? '+' : '';
+            showStatus(`Offset adjusted by ${direction}${delta}s`, 'success');
+        }
+
+        function setOffsetDirect() {
+            const input = document.getElementById('offsetDirectInput');
+            const newOffset = parseTime(input.value);
+
+            if (newOffset === null) {
+                showStatus('Invalid time format', 'error');
+                return;
+            }
+
+            if (!vods[currentVodIndex]) return;
+
+            // Calculate the change
+            const oldOffset = vods[currentVodIndex].offset;
+
+            // Update the offset
+            vods[currentVodIndex].offset = newOffset;
+            vods[currentVodIndex].offsetRaw = formatTimeReadable(newOffset);
+
+            // Seek current player to new position based on master time
+            const currentPlayer = players[currentVodIndex];
+            const newTime = masterTime + vods[currentVodIndex].offset;
+            currentPlayer.seek(Math.max(0, newTime));
+
+            // Update display
+            updateOffsetDisplay();
+
+            // Clear input
+            input.value = '';
+
+            showStatus(`Offset set to ${formatTimeReadable(newOffset)}`, 'success');
         }
 
         function formatTimeForTwitch(seconds) {
@@ -1449,17 +1731,17 @@
         }
 
         function generateUrl() {
-            const config = getVodConfig();
-            if (config.length === 0) {
+            // Use current vods array which has updated offsets
+            if (vods.length === 0) {
                 showStatus('Please add at least one VOD', 'error');
                 return;
             }
 
             const params = new URLSearchParams();
-            params.set('vods', config.map(v => v.vodId).join(','));
-            params.set('offsets', config.map(v => v.offsetRaw).join(','));
-            params.set('durations', config.map(v => v.durationRaw).join(','));
-            params.set('labels', config.map(v => encodeURIComponent(v.label)).join(','));
+            params.set('vods', vods.map(v => v.vodId).join(','));
+            params.set('offsets', vods.map(v => v.offsetRaw).join(','));
+            params.set('durations', vods.map(v => v.durationRaw || '').join(','));
+            params.set('labels', vods.map(v => encodeURIComponent(v.label)).join(','));
             params.set('default', document.getElementById('defaultDuration').value);
             params.set('start', document.getElementById('startTime').value);
             params.set('autoswap', autoSwapEnabled ? '1' : '0');
@@ -1467,6 +1749,8 @@
             const url = window.location.origin + window.location.pathname + '?' + params.toString();
             document.getElementById('shareUrl').value = url;
             document.getElementById('urlSection').classList.remove('hidden');
+
+            showStatus('URL generated with current offsets!', 'success');
         }
 
         function copyUrl() {
