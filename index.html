@@ -239,14 +239,17 @@
             flex-direction: column;
             background: #000;
             border-radius: 0;
+            width: 100vw;
+            height: 100vh;
         }
 
         .player-section:fullscreen .player-header,
         .player-section:-webkit-full-screen .player-header {
             position: absolute;
             top: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(100vw, calc(100vh * 16 / 9));
             z-index: 100;
             opacity: 0;
             transition: opacity 0.3s;
@@ -257,11 +260,41 @@
             opacity: 1;
         }
 
+        /* Hide overlays when overlay-hidden class is present */
+        .player-section.overlay-hidden:fullscreen .player-header,
+        .player-section.overlay-hidden:-webkit-full-screen .player-header,
+        .player-section.overlay-hidden:fullscreen:hover .player-header,
+        .player-section.overlay-hidden:-webkit-full-screen:hover .player-header {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        .player-section.overlay-hidden:fullscreen .fullscreen-controls,
+        .player-section.overlay-hidden:-webkit-full-screen .fullscreen-controls,
+        .player-section.overlay-hidden:fullscreen .player-container:hover .fullscreen-controls,
+        .player-section.overlay-hidden:-webkit-full-screen .player-container:hover .fullscreen-controls {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
         .player-section:fullscreen .player-container,
         .player-section:-webkit-full-screen .player-container {
             flex: 1;
             padding-top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
             height: 100%;
+        }
+
+        .player-section:fullscreen .player-wrapper,
+        .player-section:-webkit-full-screen .player-wrapper {
+            position: relative;
+            width: min(100vw, calc(100vh * 16 / 9));
+            height: min(100vh, calc(100vw * 9 / 16));
+            max-width: 100vw;
+            max-height: 100vh;
         }
 
         .player-section:fullscreen .fullscreen-controls,
@@ -275,6 +308,13 @@
             align-items: center;
             padding: 15px;
             background: #1f1f23;
+        }
+
+        /* Fullscreen header gets gradient background */
+        .player-section:fullscreen .player-header,
+        .player-section:-webkit-full-screen .player-header {
+            background: linear-gradient(rgba(0,0,0,0.9), transparent);
+            padding: 15px 20px 40px 20px;
         }
 
         .current-vod-info {
@@ -345,8 +385,9 @@
             display: none;
             position: absolute;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(100vw, calc(100vh * 16 / 9));
             background: linear-gradient(transparent, rgba(0,0,0,0.9));
             padding: 60px 20px 20px 20px;
             z-index: 100;
@@ -445,6 +486,45 @@
         .fullscreen-controls .fs-offset-btn:hover {
             border-color: #9147ff;
             background: rgba(145,71,255,0.3);
+        }
+
+        .fullscreen-controls .fs-hint {
+            font-size: 0.75rem;
+            color: #6a6a7a;
+        }
+
+        .fullscreen-controls .fs-hint kbd {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        /* Overlay toggle indicator */
+        .overlay-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            color: #efeff1;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 200;
+            display: none;
+        }
+
+        .player-section:fullscreen .overlay-indicator,
+        .player-section:-webkit-full-screen .overlay-indicator {
+            display: block;
+        }
+
+        .overlay-indicator.show {
+            opacity: 1;
         }
 
         .controls-section {
@@ -876,6 +956,9 @@
             <div class="player-container" id="playerContainer">
                 <!-- Players will be created here -->
 
+                <!-- Overlay toggle indicator -->
+                <div class="overlay-indicator" id="overlayIndicator">Controls Hidden (Press H to show)</div>
+
                 <!-- Fullscreen controls overlay -->
                 <div class="fullscreen-controls" id="fullscreenControls">
                     <div class="fullscreen-main-row">
@@ -896,6 +979,12 @@
                         <button class="fs-offset-btn" onclick="adjustOffset(0.1)">+0.1s</button>
                         <button class="fs-offset-btn" onclick="adjustOffset(1)">+1s</button>
                     </div>
+                    <div class="fs-hint">
+                        Press <kbd>H</kbd> to hide controls &nbsp;|&nbsp; 
+                        <kbd>Space</kbd> Play/Pause &nbsp;|&nbsp;
+                        <kbd>1-9</kbd> Switch VOD &nbsp;|&nbsp;
+                        <kbd>[ ]</kbd> Offset ±1s
+                    </div>
                 </div>
             </div>
         </div>
@@ -912,7 +1001,7 @@
                 <div class="vod-buttons" id="vodButtons">
                     <!-- VOD buttons will be added here -->
                 </div>
-                <span class="fullscreen-hint">Press <kbd>F</kbd> for fullscreen</span>
+                <span class="fullscreen-hint">Press <kbd>F</kbd> for fullscreen, <kbd>H</kbd> to toggle controls</span>
             </div>
 
             <!-- Offset Adjustment Section -->
@@ -997,6 +1086,8 @@
         let isPlaying = false;
         let vodCount = 0;
         let isFullscreen = false;
+        let overlayVisible = true;
+        let overlayIndicatorTimeout = null;
 
         /**
          * Parse a time string into seconds
@@ -1042,7 +1133,6 @@
             const m = Math.floor((absSeconds % 3600) / 60);
             const s = absSeconds % 60;
 
-            // Handle decimal seconds
             const sDisplay = s % 1 === 0 ? Math.floor(s) : s.toFixed(1);
 
             let result;
@@ -1067,21 +1157,20 @@
                 addVodEntry();
             }
 
-            // Set up keyboard shortcuts
             document.addEventListener('keydown', handleKeyPress);
-
-            // Listen for fullscreen changes
             document.addEventListener('fullscreenchange', handleFullscreenChange);
             document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
         }
 
         function handleKeyPress(e) {
-            // Don't trigger shortcuts when typing in inputs
             if (e.target.tagName === 'INPUT') return;
 
             switch(e.key.toLowerCase()) {
                 case 'f':
                     toggleFullscreen();
+                    break;
+                case 'h':
+                    toggleOverlay();
                     break;
                 case ' ':
                     e.preventDefault();
@@ -1112,7 +1201,6 @@
                     break;
             }
 
-            // Number keys 1-9 to switch VODs
             if (e.key >= '1' && e.key <= '9') {
                 const index = parseInt(e.key) - 1;
                 if (index < vods.length) {
@@ -1123,6 +1211,13 @@
 
         function handleFullscreenChange() {
             isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+            if (!isFullscreen) {
+                // Reset overlay visibility when exiting fullscreen
+                overlayVisible = true;
+                document.getElementById('playerSection').classList.remove('overlay-hidden');
+            }
+
             updateFullscreenControls();
         }
 
@@ -1146,6 +1241,36 @@
             } else if (document.webkitExitFullscreen) {
                 document.webkitExitFullscreen();
             }
+        }
+
+        function toggleOverlay() {
+            overlayVisible = !overlayVisible;
+            const playerSection = document.getElementById('playerSection');
+            const indicator = document.getElementById('overlayIndicator');
+
+            if (overlayVisible) {
+                playerSection.classList.remove('overlay-hidden');
+                indicator.textContent = 'Controls Shown';
+            } else {
+                playerSection.classList.add('overlay-hidden');
+                indicator.textContent = 'Controls Hidden (Press H to show)';
+            }
+
+            // Show indicator briefly
+            showOverlayIndicator();
+        }
+
+        function showOverlayIndicator() {
+            const indicator = document.getElementById('overlayIndicator');
+            indicator.classList.add('show');
+
+            if (overlayIndicatorTimeout) {
+                clearTimeout(overlayIndicatorTimeout);
+            }
+
+            overlayIndicatorTimeout = setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 1500);
         }
 
         function updateFullscreenControls() {
@@ -1313,7 +1438,6 @@
         function createPlayers() {
             const container = document.getElementById('playerContainer');
 
-            // Remove old player wrappers but keep fullscreen controls
             const oldWrappers = container.querySelectorAll('.player-wrapper');
             oldWrappers.forEach(w => w.remove());
 
@@ -1325,7 +1449,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'player-wrapper' + (i === 0 ? ' active' : '');
                 wrapper.id = `player-wrapper-${i}`;
-                container.insertBefore(wrapper, document.getElementById('fullscreenControls'));
+                container.insertBefore(wrapper, document.getElementById('overlayIndicator'));
 
                 playerReady.push(false);
 
@@ -1449,7 +1573,6 @@
             newPlayer.seek(newTime);
             newPlayer.setMuted(false);
 
-            // Small delay to allow seek to process, then always play
             setTimeout(() => {
                 newPlayer.play();
                 isPlaying = true;
@@ -1498,30 +1621,23 @@
 
             const offsetValue = formatTimeReadable(currentVod.offset);
 
-            // Update main controls
             document.getElementById('offsetVodName').textContent = currentVod.label;
             document.getElementById('offsetCurrentValue').textContent = offsetValue;
-
-            // Update fullscreen controls
             document.getElementById('fsOffsetValue').textContent = offsetValue;
         }
 
         function adjustOffset(delta) {
             if (!vods[currentVodIndex]) return;
 
-            // Update the offset
             vods[currentVodIndex].offset += delta;
             vods[currentVodIndex].offsetRaw = formatTimeReadable(vods[currentVodIndex].offset);
 
-            // Seek current player to new position based on master time
             const currentPlayer = players[currentVodIndex];
             const newTime = masterTime + vods[currentVodIndex].offset;
             currentPlayer.seek(Math.max(0, newTime));
 
-            // Update display
             updateOffsetDisplay();
 
-            // Show brief feedback
             const direction = delta > 0 ? '+' : '';
             showStatus(`Offset adjusted by ${direction}${delta}s`, 'success');
         }
@@ -1537,22 +1653,14 @@
 
             if (!vods[currentVodIndex]) return;
 
-            // Calculate the change
-            const oldOffset = vods[currentVodIndex].offset;
-
-            // Update the offset
             vods[currentVodIndex].offset = newOffset;
             vods[currentVodIndex].offsetRaw = formatTimeReadable(newOffset);
 
-            // Seek current player to new position based on master time
             const currentPlayer = players[currentVodIndex];
             const newTime = masterTime + vods[currentVodIndex].offset;
             currentPlayer.seek(Math.max(0, newTime));
 
-            // Update display
             updateOffsetDisplay();
-
-            // Clear input
             input.value = '';
 
             showStatus(`Offset set to ${formatTimeReadable(newOffset)}`, 'success');
@@ -1731,7 +1839,6 @@
         }
 
         function generateUrl() {
-            // Use current vods array which has updated offsets
             if (vods.length === 0) {
                 showStatus('Please add at least one VOD', 'error');
                 return;
