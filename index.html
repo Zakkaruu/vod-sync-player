@@ -940,6 +940,21 @@
                     <input type="text" id="startTime" value="0" placeholder="e.g., 0 or 1:30:00">
                     <div class="hint">Master timeline start position. Use <code>0</code> to start from the beginning, or a time like <code>1:30:00</code> to skip ahead.</div>
                 </div>
+                <div class="config-group">
+                    <label>Video Quality</label>
+                    <select id="qualitySelect">
+                        <option value="auto">Auto</option>
+                        <option value="chunked">Source</option>
+                        <option value="1080p60">1080p60</option>
+                        <option value="1080p30">1080p30</option>
+                        <option value="720p60">720p60</option>
+                        <option value="720p30">720p30</option>
+                        <option value="480p30">480p</option>
+                        <option value="360p30">360p</option>
+                        <option value="160p30">160p</option>
+                    </select>
+                    <div class="hint">Video quality for all VODs. <code>Source</code> = highest quality. Lower = faster loading.</div>
+                </div>
             </div>
 
             <div class="btn-group">
@@ -1096,6 +1111,7 @@
         let isFullscreen = false;
         let overlayVisible = true;
         let overlayIndicatorTimeout = null;
+        let selectedQuality = 'auto';
 
         /**
          * Parse a time string into seconds
@@ -1185,7 +1201,7 @@
         }
 
         function handleKeyPress(e) {
-            if (e.target.tagName === 'INPUT') return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
             switch(e.key.toLowerCase()) {
                 case 'f':
@@ -1346,9 +1362,12 @@
             const defaultDur = params.get('default') || '5:00';
             const start = params.get('start') || '0';
             const autoSwap = params.get('autoswap') === '1';
+            const quality = params.get('quality') || 'auto';
 
             document.getElementById('defaultDuration').value = defaultDur;
             document.getElementById('startTime').value = start;
+            document.getElementById('qualitySelect').value = quality;
+            selectedQuality = quality;
 
             vodIds.forEach((id, i) => {
                 const offsetVal = offsets[i] || '0';
@@ -1452,6 +1471,7 @@
 
             defaultDuration = parseTime(document.getElementById('defaultDuration').value) || 300;
             masterTime = parseTime(document.getElementById('startTime').value) || 0;
+            selectedQuality = document.getElementById('qualitySelect').value;
 
             document.getElementById('configPanel').classList.add('hidden');
             document.getElementById('playerSection').classList.remove('hidden');
@@ -1467,6 +1487,16 @@
 
             if (autoSwapEnabled) {
                 startAutoSwap();
+            }
+        }
+
+        function applyQuality(player) {
+            if (selectedQuality !== 'auto') {
+                try {
+                    player.setQuality(selectedQuality);
+                } catch (e) {
+                    console.log('Could not set quality:', e);
+                }
             }
         }
 
@@ -1511,6 +1541,11 @@
                     } else {
                         player.pause();
                     }
+                });
+
+                // Apply quality when playback starts
+                player.addEventListener(Twitch.Player.PLAYING, () => {
+                    applyQuality(player);
                 });
 
                 players.push(player);
@@ -1607,6 +1642,9 @@
 
             newPlayer.seek(newTime);
             newPlayer.setMuted(false);
+
+            // Apply selected quality
+            applyQuality(newPlayer);
 
             setTimeout(() => {
                 newPlayer.play();
@@ -1887,6 +1925,10 @@
             params.set('default', document.getElementById('defaultDuration').value);
             params.set('start', document.getElementById('startTime').value);
             params.set('autoswap', autoSwapEnabled ? '1' : '0');
+
+            if (selectedQuality !== 'auto') {
+                params.set('quality', selectedQuality);
+            }
 
             const url = window.location.origin + window.location.pathname + '?' + params.toString();
             document.getElementById('shareUrl').value = url;
