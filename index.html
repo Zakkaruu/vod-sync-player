@@ -232,9 +232,10 @@
             margin-bottom: 20px;
         }
 
-        /* Fullscreen styles for player section */
+        /* Fullscreen styles for player section - with Firefox support */
         .player-section:fullscreen,
-        .player-section:-webkit-full-screen {
+        .player-section:-webkit-full-screen,
+        .player-section:-moz-full-screen {
             display: flex;
             flex-direction: column;
             background: #000;
@@ -244,7 +245,8 @@
         }
 
         .player-section:fullscreen .player-header,
-        .player-section:-webkit-full-screen .player-header {
+        .player-section:-webkit-full-screen .player-header,
+        .player-section:-moz-full-screen .player-header {
             position: absolute;
             top: 0;
             left: 50%;
@@ -256,29 +258,35 @@
         }
 
         .player-section:fullscreen:hover .player-header,
-        .player-section:-webkit-full-screen:hover .player-header {
+        .player-section:-webkit-full-screen:hover .player-header,
+        .player-section:-moz-full-screen:hover .player-header {
             opacity: 1;
         }
 
-        /* Hide overlays when overlay-hidden class is present */
+        /* Hide overlays when overlay-hidden class is present - with Firefox support */
         .player-section.overlay-hidden:fullscreen .player-header,
         .player-section.overlay-hidden:-webkit-full-screen .player-header,
+        .player-section.overlay-hidden:-moz-full-screen .player-header,
         .player-section.overlay-hidden:fullscreen:hover .player-header,
-        .player-section.overlay-hidden:-webkit-full-screen:hover .player-header {
+        .player-section.overlay-hidden:-webkit-full-screen:hover .player-header,
+        .player-section.overlay-hidden:-moz-full-screen:hover .player-header {
             opacity: 0 !important;
             pointer-events: none;
         }
 
         .player-section.overlay-hidden:fullscreen .fullscreen-controls,
         .player-section.overlay-hidden:-webkit-full-screen .fullscreen-controls,
+        .player-section.overlay-hidden:-moz-full-screen .fullscreen-controls,
         .player-section.overlay-hidden:fullscreen .player-container:hover .fullscreen-controls,
-        .player-section.overlay-hidden:-webkit-full-screen .player-container:hover .fullscreen-controls {
+        .player-section.overlay-hidden:-webkit-full-screen .player-container:hover .fullscreen-controls,
+        .player-section.overlay-hidden:-moz-full-screen .player-container:hover .fullscreen-controls {
             opacity: 0 !important;
             pointer-events: none;
         }
 
         .player-section:fullscreen .player-container,
-        .player-section:-webkit-full-screen .player-container {
+        .player-section:-webkit-full-screen .player-container,
+        .player-section:-moz-full-screen .player-container {
             flex: 1;
             padding-top: 0;
             display: flex;
@@ -286,19 +294,24 @@
             justify-content: center;
             width: 100%;
             height: 100%;
+            min-height: 0; /* Firefox flexbox fix */
         }
 
         .player-section:fullscreen .player-wrapper,
-        .player-section:-webkit-full-screen .player-wrapper {
+        .player-section:-webkit-full-screen .player-wrapper,
+        .player-section:-moz-full-screen .player-wrapper {
             position: relative;
             width: min(100vw, calc(100vh * 16 / 9));
             height: min(100vh, calc(100vw * 9 / 16));
             max-width: 100vw;
             max-height: 100vh;
+            min-height: 0; /* Firefox flexbox fix */
+            min-width: 0;  /* Firefox flexbox fix */
         }
 
         .player-section:fullscreen .fullscreen-controls,
-        .player-section:-webkit-full-screen .fullscreen-controls {
+        .player-section:-webkit-full-screen .fullscreen-controls,
+        .player-section:-moz-full-screen .fullscreen-controls {
             display: flex;
         }
 
@@ -310,9 +323,10 @@
             background: #1f1f23;
         }
 
-        /* Fullscreen header gets gradient background */
+        /* Fullscreen header gets gradient background - with Firefox support */
         .player-section:fullscreen .player-header,
-        .player-section:-webkit-full-screen .player-header {
+        .player-section:-webkit-full-screen .player-header,
+        .player-section:-moz-full-screen .player-header {
             background: linear-gradient(rgba(0,0,0,0.9), transparent);
             padding: 15px 20px 40px 20px;
         }
@@ -399,7 +413,8 @@
         }
 
         .player-section:fullscreen .player-container:hover .fullscreen-controls,
-        .player-section:-webkit-full-screen .player-container:hover .fullscreen-controls {
+        .player-section:-webkit-full-screen .player-container:hover .fullscreen-controls,
+        .player-section:-moz-full-screen .player-container:hover .fullscreen-controls {
             opacity: 1;
         }
 
@@ -500,7 +515,7 @@
             font-family: monospace;
         }
 
-        /* Overlay toggle indicator */
+        /* Overlay toggle indicator - with Firefox support */
         .overlay-indicator {
             position: absolute;
             top: 50%;
@@ -519,7 +534,8 @@
         }
 
         .player-section:fullscreen .overlay-indicator,
-        .player-section:-webkit-full-screen .overlay-indicator {
+        .player-section:-webkit-full-screen .overlay-indicator,
+        .player-section:-moz-full-screen .overlay-indicator {
             display: block;
         }
 
@@ -1158,8 +1174,11 @@
             }
 
             document.addEventListener('keydown', handleKeyPress);
+
+            // Fullscreen change event listeners - with Firefox support
             document.addEventListener('fullscreenchange', handleFullscreenChange);
             document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.addEventListener('mozfullscreenchange', handleFullscreenChange);
         }
 
         function handleKeyPress(e) {
@@ -1210,7 +1229,8 @@
         }
 
         function handleFullscreenChange() {
-            isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            // Check for fullscreen element with Firefox support
+            isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
 
             if (!isFullscreen) {
                 // Reset overlay visibility when exiting fullscreen
@@ -1229,6 +1249,8 @@
                     playerSection.requestFullscreen();
                 } else if (playerSection.webkitRequestFullscreen) {
                     playerSection.webkitRequestFullscreen();
+                } else if (playerSection.mozRequestFullScreen) {
+                    playerSection.mozRequestFullScreen();
                 }
             } else {
                 exitFullscreen();
@@ -1240,6 +1262,8 @@
                 document.exitFullscreen();
             } else if (document.webkitExitFullscreen) {
                 document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
             }
         }
 
