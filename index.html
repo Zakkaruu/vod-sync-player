@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch VOD Sync Player</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #9147ff;
+        }
+
+        .config-panel {
+            background: #18181b;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .config-panel h2 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            color: #bf94ff;
+        }
+
+        .config-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .config-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .config-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #adadb8;
+        }
+
+        .config-group input, .config-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+            font-size: 1rem;
+        }
+
+        .config-group input:focus, .config-group select:focus {
+            outline: none;
+            border-color: #9147ff;
+        }
+
+        .config-group .hint {
+            font-size: 0.75rem;
+            color: #848494;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+
+        .vod-entries {
+            margin-bottom: 15px;
+        }
+
+        .vod-entries-header {
+            display: grid;
+            grid-template-columns: 28px 2fr 140px 150px 44px;
+            gap: 10px;
+            padding: 0 10px 8px 10px;
+            font-size: 0.8rem;
+            color: #848494;
+            border-bottom: 1px solid #3a3a3d;
+            margin-bottom: 10px;
+        }
+
+        .vod-entries-header span:first-child {
+            text-align: center;
+        }
+
+        .vod-entry {
+            display: grid;
+            grid-template-columns: 28px 2fr 140px 150px 44px;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+            background: #0e0e10;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .vod-entry input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #18181b;
+            color: #efeff1;
+            font-size: 0.9rem;
+        }
+
+        .vod-entry input:focus {
+            outline: none;
+            border-color: #9147ff;
+        }
+
+        .vod-entry input::placeholder {
+            color: #6a6a7a;
+            font-size: 0.85rem;
+        }
+
+        .vod-number {
+            background: #9147ff;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .vod-input-hints {
+            background: #1f1f23;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 0.8rem;
+            color: #848494;
+            line-height: 1.6;
+        }
+
+        .vod-input-hints strong {
+            color: #bf94ff;
+        }
+
+        .vod-input-hints code {
+            background: #0e0e10;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: #efeff1;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #9147ff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #772ce8;
+        }
+
+        .btn-secondary {
+            background: #3a3a3d;
+            color: #efeff1;
+        }
+
+        .btn-secondary:hover {
+            background: #4a4a4d;
+        }
+
+        .btn-danger {
+            background: #eb0400;
+            color: white;
+            padding: 8px 12px;
+        }
+
+        .btn-danger:hover {
+            background: #cc0000;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .player-section {
+            background: #18181b;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #1f1f23;
+        }
+
+        .current-vod-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .current-vod-badge {
+            background: #9147ff;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .sync-time {
+            color: #adadb8;
+        }
+
+        .player-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%;
+            background: #000;
+        }
+
+        .player-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .player-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        .player-wrapper.active {
+            display: block;
+        }
+
+        .controls-section {
+            background: #18181b;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .vod-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .vod-btn {
+            padding: 10px 20px;
+            border: 2px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .vod-btn:hover {
+            border-color: #9147ff;
+        }
+
+        .vod-btn.active {
+            border-color: #9147ff;
+            background: #9147ff;
+            color: white;
+        }
+
+        .auto-swap-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #0e0e10;
+            border-radius: 4px;
+        }
+
+        .auto-swap-controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .auto-swap-controls input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .swap-timer {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #9147ff;
+            min-width: 60px;
+        }
+
+        .url-section {
+            background: #18181b;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .url-section h3 {
+            margin-bottom: 10px;
+            color: #bf94ff;
+        }
+
+        .url-display {
+            display: flex;
+            gap: 10px;
+        }
+
+        .url-display input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+            font-family: monospace;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .status-message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .status-success {
+            background: #1a472a;
+            color: #4ade80;
+        }
+
+        .status-error {
+            background: #472a2a;
+            color: #f87171;
+        }
+
+        .master-time-display {
+            background: #0e0e10;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .master-time-display .label {
+            color: #adadb8;
+            font-size: 0.9rem;
+        }
+
+        .master-time-display .time {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: monospace;
+            color: #9147ff;
+        }
+
+        .seek-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .seek-controls input {
+            width: 120px;
+            padding: 8px;
+            border: 1px solid #3a3a3d;
+            border-radius: 4px;
+            background: #0e0e10;
+            color: #efeff1;
+        }
+
+        .seek-controls input::placeholder {
+            color: #6a6a7a;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .vod-entries-header {
+                display: none;
+            }
+
+            .vod-entry {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .vod-entry .vod-number {
+                justify-self: start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📺 Twitch VOD Sync Player</h1>
+
+        <div id="statusMessage" class="status-message hidden"></div>
+
+        <!-- Configuration Panel -->
+        <div id="configPanel" class="config-panel">
+            <h2>⚙️ Configuration</h2>
+
+            <div class="vod-input-hints">
+                <strong>VOD ID:</strong> The numeric ID from the Twitch VOD URL. Example: <code>twitch.tv/videos/<strong>2345678901</strong></code> → enter <code>2345678901</code><br>
+                <strong>Offset:</strong> Time adjustment in seconds. Use <code>0</code> for the reference VOD, positive values if the VOD starts later, negative if it starts earlier.<br>
+                <strong>Label:</strong> A friendly name to identify each stream (e.g., streamer name).
+            </div>
+
+            <div class="vod-entries-header">
+                <span>#</span>
+                <span>VOD ID</span>
+                <span>Offset (seconds)</span>
+                <span>Label</span>
+                <span></span>
+            </div>
+
+            <div class="vod-entries" id="vodEntries">
+                <!-- VOD entries will be added here -->
+            </div>
+
+            <div class="btn-group" style="margin-bottom: 20px;">
+                <button class="btn btn-secondary" onclick="addVodEntry()">+ Add VOD</button>
+            </div>
+
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Swap Duration (seconds)</label>
+                    <input type="number" id="swapDuration" value="30" min="5" max="3600" placeholder="e.g., 30">
+                    <div class="hint">How many seconds to watch each VOD before auto-swapping to the next. Range: 5–3600 seconds.</div>
+                </div>
+                <div class="config-group">
+                    <label>Start Time (seconds)</label>
+                    <input type="number" id="startTime" value="0" min="0" placeholder="e.g., 0 or 3600">
+                    <div class="hint">Master timeline start position in seconds. Use <code>0</code> to start from the beginning, or enter seconds to skip ahead (e.g., <code>3600</code> = 1 hour in).</div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="startPlayer()">▶️ Start Player</button>
+                <button class="btn btn-secondary" onclick="generateUrl()">🔗 Generate Share URL</button>
+            </div>
+        </div>
+
+        <!-- Player Section -->
+        <div id="playerSection" class="player-section hidden">
+            <div class="player-header">
+                <div class="current-vod-info">
+                    <span class="current-vod-badge" id="currentVodBadge">VOD 1</span>
+                    <span id="currentVodLabel"></span>
+                </div>
+                <button class="btn btn-secondary" onclick="toggleConfig()">⚙️ Config</button>
+            </div>
+            <div class="player-container" id="playerContainer">
+                <!-- Players will be created here -->
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div id="controlsSection" class="controls-section hidden">
+            <div class="master-time-display">
+                <div class="label">Master Sync Time</div>
+                <div class="time" id="masterTimeDisplay">00:00:00</div>
+            </div>
+
+            <div class="controls-row">
+                <span>Switch VOD:</span>
+                <div class="vod-buttons" id="vodButtons">
+                    <!-- VOD buttons will be added here -->
+                </div>
+            </div>
+
+            <div class="controls-row">
+                <div class="seek-controls">
+                    <button class="btn btn-secondary" onclick="seekRelative(-30)">⏪ -30s</button>
+                    <button class="btn btn-secondary" onclick="seekRelative(-10)">⏪ -10s</button>
+                    <button class="btn btn-secondary" onclick="togglePlayPause()">⏯️ Play/Pause</button>
+                    <button class="btn btn-secondary" onclick="seekRelative(10)">+10s ⏩</button>
+                    <button class="btn btn-secondary" onclick="seekRelative(30)">+30s ⏩</button>
+                    <input type="number" id="seekToTime" placeholder="Seconds (e.g., 3600)">
+                    <button class="btn btn-secondary" onclick="seekToMasterTime()">Go</button>
+                </div>
+            </div>
+
+            <div class="auto-swap-controls">
+                <label>
+                    <input type="checkbox" id="autoSwapEnabled" onchange="toggleAutoSwap()">
+                    Auto-swap every
+                </label>
+                <input type="number" id="swapDurationControl" value="30" min="5" max="3600" style="width: 80px;" onchange="updateSwapDuration()" title="Seconds between auto-swaps (5-3600)">
+                <span>seconds</span>
+                <div class="swap-timer" id="swapTimer">--</div>
+            </div>
+        </div>
+
+        <!-- URL Section -->
+        <div id="urlSection" class="url-section hidden">
+            <h3>📋 Shareable URL</h3>
+            <div class="url-display">
+                <input type="text" id="shareUrl" readonly placeholder="Click 'Generate Share URL' to create a link">
+                <button class="btn btn-primary" onclick="copyUrl()">Copy</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://player.twitch.tv/js/embed/v1.js"></script>
+    <script>
+        // State
+        let vods = [];
+        let players = [];
+        let currentVodIndex = 0;
+        let masterTime = 0;
+        let swapDuration = 30;
+        let autoSwapEnabled = false;
+        let swapTimerInterval = null;
+        let timeUpdateInterval = null;
+        let swapCountdown = 0;
+        let isPlaying = false;
+        let vodCount = 0;
+
+        // Initialize from URL params or with default entries
+        function init() {
+            const params = new URLSearchParams(window.location.search);
+
+            if (params.has('vods')) {
+                loadFromUrl(params);
+            } else {
+                addVodEntry();
+                addVodEntry();
+            }
+        }
+
+        function loadFromUrl(params) {
+            const vodIds = params.get('vods')?.split(',') || [];
+            const offsets = params.get('offsets')?.split(',').map(Number) || [];
+            const labels = params.get('labels')?.split(',').map(decodeURIComponent) || [];
+            const duration = parseInt(params.get('duration')) || 30;
+            const start = parseInt(params.get('start')) || 0;
+            const autoSwap = params.get('autoswap') === '1';
+
+            document.getElementById('swapDuration').value = duration;
+            document.getElementById('startTime').value = start;
+
+            vodIds.forEach((id, i) => {
+                addVodEntry(id, offsets[i] || 0, labels[i] || `VOD ${i + 1}`);
+            });
+
+            if (vodIds.length > 0) {
+                swapDuration = duration;
+                masterTime = start;
+                autoSwapEnabled = autoSwap;
+                startPlayer();
+            }
+        }
+
+        function addVodEntry(vodId = '', offset = 0, label = '') {
+            vodCount++;
+            const container = document.getElementById('vodEntries');
+            const entry = document.createElement('div');
+            entry.className = 'vod-entry';
+            entry.dataset.index = vodCount;
+
+            const offsetPlaceholder = vodCount === 1 
+                ? "0 (reference)" 
+                : "e.g., 45 or -30";
+
+            const labelPlaceholder = `e.g., Streamer${vodCount}`;
+
+            entry.innerHTML = `
+                <span class="vod-number">${vodCount}</span>
+                <input type="text" class="vod-id" placeholder="e.g., 2345678901" value="${vodId}" title="Numeric VOD ID from twitch.tv/videos/[ID]">
+                <input type="text" class="vod-offset" placeholder="${offsetPlaceholder}" value="${offset}" title="Offset in seconds: 0 for reference, positive if this VOD starts later, negative if earlier">
+                <input type="text" class="vod-label" placeholder="${labelPlaceholder}" value="${label}" title="Display name for this VOD">
+                <button class="btn btn-danger" onclick="removeVodEntry(this)" title="Remove this VOD">✕</button>
+            `;
+            container.appendChild(entry);
+        }
+
+        function removeVodEntry(btn) {
+            const entry = btn.closest('.vod-entry');
+            entry.remove();
+            renumberEntries();
+        }
+
+        function renumberEntries() {
+            const entries = document.querySelectorAll('.vod-entry');
+            entries.forEach((entry, i) => {
+                entry.querySelector('.vod-number').textContent = i + 1;
+                // Update placeholder for first entry
+                const offsetInput = entry.querySelector('.vod-offset');
+                if (i === 0 && !offsetInput.value) {
+                    offsetInput.placeholder = "0 (reference)";
+                }
+            });
+            vodCount = entries.length;
+        }
+
+        function getVodConfig() {
+            const entries = document.querySelectorAll('.vod-entry');
+            const config = [];
+            entries.forEach((entry, i) => {
+                const vodId = entry.querySelector('.vod-id').value.trim();
+                const offset = parseFloat(entry.querySelector('.vod-offset').value) || 0;
+                const label = entry.querySelector('.vod-label').value.trim() || `VOD ${i + 1}`;
+                if (vodId) {
+                    config.push({ vodId, offset, label });
+                }
+            });
+            return config;
+        }
+
+        function startPlayer() {
+            vods = getVodConfig();
+
+            if (vods.length === 0) {
+                showStatus('Please add at least one VOD ID', 'error');
+                return;
+            }
+
+            swapDuration = parseInt(document.getElementById('swapDuration').value) || 30;
+            masterTime = parseInt(document.getElementById('startTime').value) || 0;
+
+            document.getElementById('configPanel').classList.add('hidden');
+            document.getElementById('playerSection').classList.remove('hidden');
+            document.getElementById('controlsSection').classList.remove('hidden');
+
+            createPlayers();
+            createVodButtons();
+
+            document.getElementById('swapDurationControl').value = swapDuration;
+            document.getElementById('autoSwapEnabled').checked = autoSwapEnabled;
+
+            startTimeUpdates();
+
+            if (autoSwapEnabled) {
+                startAutoSwap();
+            }
+        }
+
+        function createPlayers() {
+            const container = document.getElementById('playerContainer');
+            container.innerHTML = '';
+            players = [];
+
+            vods.forEach((vod, i) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'player-wrapper' + (i === 0 ? ' active' : '');
+                wrapper.id = `player-wrapper-${i}`;
+                container.appendChild(wrapper);
+
+                const player = new Twitch.Player(`player-wrapper-${i}`, {
+                    video: vod.vodId,
+                    width: '100%',
+                    height: '100%',
+                    autoplay: i === 0,
+                    muted: i !== 0,
+                    time: formatTimeForTwitch(masterTime + vod.offset)
+                });
+
+                player.addEventListener(Twitch.Player.READY, () => {
+                    if (i === 0) {
+                        player.seek(masterTime + vod.offset);
+                        player.play();
+                        isPlaying = true;
+                    } else {
+                        player.pause();
+                    }
+                });
+
+                players.push(player);
+            });
+
+            updateCurrentVodDisplay();
+        }
+
+        function createVodButtons() {
+            const container = document.getElementById('vodButtons');
+            container.innerHTML = '';
+
+            vods.forEach((vod, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'vod-btn' + (i === 0 ? ' active' : '');
+                btn.textContent = vod.label;
+                btn.onclick = () => switchToVod(i);
+                container.appendChild(btn);
+            });
+        }
+
+        function switchToVod(index) {
+            if (index === currentVodIndex || index >= players.length) return;
+
+            // Get current master time from active player
+            const currentPlayer = players[currentVodIndex];
+            const currentVodOffset = vods[currentVodIndex].offset;
+
+            try {
+                const currentTime = currentPlayer.getCurrentTime();
+                masterTime = currentTime - currentVodOffset;
+            } catch (e) {
+                console.log('Could not get current time, using tracked master time');
+            }
+
+            // Pause and mute current
+            currentPlayer.pause();
+            currentPlayer.setMuted(true);
+
+            // Hide current wrapper, show new wrapper
+            document.querySelectorAll('.player-wrapper').forEach(w => w.classList.remove('active'));
+            document.getElementById(`player-wrapper-${index}`).classList.add('active');
+
+            // Seek and play new VOD
+            const newPlayer = players[index];
+            const newOffset = vods[index].offset;
+            const newTime = masterTime + newOffset;
+
+            newPlayer.seek(newTime);
+            newPlayer.setMuted(false);
+
+            if (isPlaying) {
+                newPlayer.play();
+            }
+
+            currentVodIndex = index;
+            updateCurrentVodDisplay();
+            resetSwapTimer();
+        }
+
+        function updateCurrentVodDisplay() {
+            document.getElementById('currentVodBadge').textContent = `VOD ${currentVodIndex + 1}`;
+            document.getElementById('currentVodLabel').textContent = vods[currentVodIndex]?.label || '';
+
+            document.querySelectorAll('.vod-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === currentVodIndex);
+            });
+        }
+
+        function formatTimeForTwitch(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h}h${m}m${s}s`;
+        }
+
+        function formatTimeDisplay(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function startTimeUpdates() {
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+
+            timeUpdateInterval = setInterval(() => {
+                try {
+                    const currentPlayer = players[currentVodIndex];
+                    if (currentPlayer && isPlaying) {
+                        const currentTime = currentPlayer.getCurrentTime();
+                        const currentOffset = vods[currentVodIndex].offset;
+                        masterTime = currentTime - currentOffset;
+                    }
+                } catch (e) {
+                    // Player might not be ready
+                }
+                document.getElementById('masterTimeDisplay').textContent = formatTimeDisplay(Math.max(0, masterTime));
+            }, 500);
+        }
+
+        function toggleAutoSwap() {
+            autoSwapEnabled = document.getElementById('autoSwapEnabled').checked;
+            if (autoSwapEnabled) {
+                startAutoSwap();
+            } else {
+                stopAutoSwap();
+            }
+        }
+
+        function startAutoSwap() {
+            resetSwapTimer();
+            if (swapTimerInterval) clearInterval(swapTimerInterval);
+
+            swapCountdown = swapDuration;
+            swapTimerInterval = setInterval(() => {
+                if (!isPlaying) return;
+
+                swapCountdown--;
+                document.getElementById('swapTimer').textContent = swapCountdown + 's';
+
+                if (swapCountdown <= 0) {
+                    const nextIndex = (currentVodIndex + 1) % vods.length;
+                    switchToVod(nextIndex);
+                }
+            }, 1000);
+        }
+
+        function stopAutoSwap() {
+            if (swapTimerInterval) {
+                clearInterval(swapTimerInterval);
+                swapTimerInterval = null;
+            }
+            document.getElementById('swapTimer').textContent = '--';
+        }
+
+        function resetSwapTimer() {
+            swapCountdown = swapDuration;
+            document.getElementById('swapTimer').textContent = swapCountdown + 's';
+        }
+
+        function updateSwapDuration() {
+            swapDuration = parseInt(document.getElementById('swapDurationControl').value) || 30;
+            document.getElementById('swapDuration').value = swapDuration;
+            if (autoSwapEnabled) {
+                resetSwapTimer();
+            }
+        }
+
+        function seekRelative(seconds) {
+            masterTime += seconds;
+            if (masterTime < 0) masterTime = 0;
+
+            const currentPlayer = players[currentVodIndex];
+            const newTime = masterTime + vods[currentVodIndex].offset;
+            currentPlayer.seek(newTime);
+        }
+
+        function seekToMasterTime() {
+            const input = document.getElementById('seekToTime');
+            const newTime = parseInt(input.value);
+            if (!isNaN(newTime) && newTime >= 0) {
+                masterTime = newTime;
+                const currentPlayer = players[currentVodIndex];
+                currentPlayer.seek(masterTime + vods[currentVodIndex].offset);
+            }
+            input.value = '';
+        }
+
+        function togglePlayPause() {
+            const currentPlayer = players[currentVodIndex];
+            if (isPlaying) {
+                currentPlayer.pause();
+                isPlaying = false;
+            } else {
+                currentPlayer.play();
+                isPlaying = true;
+            }
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function generateUrl() {
+            const config = getVodConfig();
+            if (config.length === 0) {
+                showStatus('Please add at least one VOD', 'error');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.set('vods', config.map(v => v.vodId).join(','));
+            params.set('offsets', config.map(v => v.offset).join(','));
+            params.set('labels', config.map(v => encodeURIComponent(v.label)).join(','));
+            params.set('duration', document.getElementById('swapDuration').value);
+            params.set('start', document.getElementById('startTime').value);
+            params.set('autoswap', autoSwapEnabled ? '1' : '0');
+
+            const url = window.location.origin + window.location.pathname + '?' + params.toString();
+            document.getElementById('shareUrl').value = url;
+            document.getElementById('urlSection').classList.remove('hidden');
+        }
+
+        function copyUrl() {
+            const input = document.getElementById('shareUrl');
+            input.select();
+            document.execCommand('copy');
+            showStatus('URL copied to clipboard!', 'success');
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status-message status-${type}`;
+            setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
