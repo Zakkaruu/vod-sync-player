@@ -377,11 +377,6 @@
             left: 0;
             width: 100%;
             height: 100%;
-            display: none;
-        }
-
-        .player-wrapper.active {
-            display: block;
         }
 
         /* Fullscreen controls overlay */
@@ -565,7 +560,6 @@
             flex-direction: column;
             align-items: center;
             gap: 2px;
-            position: relative;
         }
 
         .vod-btn:hover {
@@ -586,20 +580,6 @@
 
         .vod-btn.active .vod-btn-duration {
             opacity: 0.9;
-        }
-
-        .vod-btn .ready-indicator {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #3a3a3d;
-        }
-
-        .vod-btn .ready-indicator.ready {
-            background: #4ade80;
         }
 
         .offset-adjust-section {
@@ -958,7 +938,8 @@
                 </div>
             </div>
             <div class="player-container" id="playerContainer">
-                <!-- Players will be created here -->
+                <!-- Single player wrapper -->
+                <div class="player-wrapper" id="player-wrapper"></div>
 
                 <!-- Overlay toggle indicator -->
                 <div class="overlay-indicator" id="overlayIndicator">Controls Hidden (Press H to show)</div>
@@ -1075,11 +1056,10 @@
 
     <script src="https://player.twitch.tv/js/embed/v1.js"></script>
     <script>
-        // State
+        // State - Simplified: single player instead of array
         let vods = [];
-        let players = [];
-        let playerReady = [];
-        let pendingSwitch = null;
+        let player = null;
+        let playerReady = false;
         let currentVodIndex = 0;
         let masterTime = 0;
         let defaultDuration = 300;
@@ -1092,6 +1072,7 @@
         let isFullscreen = false;
         let overlayVisible = true;
         let overlayIndicatorTimeout = null;
+        let isLoading = false;
 
         /**
          * Parse a time string into seconds
@@ -1217,7 +1198,6 @@
             isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
 
             if (!isFullscreen) {
-                // Reset overlay visibility when exiting fullscreen
                 overlayVisible = true;
                 document.getElementById('playerSection').classList.remove('overlay-hidden');
             }
@@ -1260,7 +1240,6 @@
                 indicator.textContent = 'Controls Hidden (Press H to show)';
             }
 
-            // Show indicator briefly
             showOverlayIndicator();
         }
 
@@ -1426,7 +1405,7 @@
             document.getElementById('playerSection').classList.remove('hidden');
             document.getElementById('controlsSection').classList.remove('hidden');
 
-            createPlayers();
+            createPlayer();
             createVodButtons();
             updateOffsetDisplay();
 
@@ -1439,50 +1418,33 @@
             }
         }
 
-        function createPlayers() {
-            const container = document.getElementById('playerContainer');
+        // SIMPLIFIED: Create a single player
+        function createPlayer() {
+            const vod = vods[0];
+            const startTime = masterTime + vod.offset;
 
-            const oldWrappers = container.querySelectorAll('.player-wrapper');
-            oldWrappers.forEach(w => w.remove());
+            player = new Twitch.Player('player-wrapper', {
+                video: vod.vodId,
+                width: '100%',
+                height: '100%',
+                autoplay: true,
+                time: formatTimeForTwitch(startTime)
+            });
 
-            players = [];
-            playerReady = [];
-            pendingSwitch = null;
+            player.addEventListener(Twitch.Player.READY, () => {
+                playerReady = true;
+                player.seek(startTime);
+                player.play();
+                isPlaying = true;
+                setLoadingState(false);
+            });
 
-            vods.forEach((vod, i) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'player-wrapper' + (i === 0 ? ' active' : '');
-                wrapper.id = `player-wrapper-${i}`;
-                container.insertBefore(wrapper, document.getElementById('overlayIndicator'));
-
-                playerReady.push(false);
-
-                const player = new Twitch.Player(`player-wrapper-${i}`, {
-                    video: vod.vodId,
-                    width: '100%',
-                    height: '100%',
-                    autoplay: i === 0,
-                    muted: i !== 0,
-                    time: formatTimeForTwitch(masterTime + vod.offset)
-                });
-
-                player.addEventListener(Twitch.Player.READY, () => {
-                    playerReady[i] = true;
-                    updateVodButtonReadyState(i, true);
-
-                    if (pendingSwitch && pendingSwitch.index === i) {
-                        completeSwitchToVod(pendingSwitch.index, pendingSwitch.masterTimeAtSwitch);
-                        pendingSwitch = null;
-                    } else if (i === 0) {
-                        player.seek(masterTime + vod.offset);
-                        player.play();
-                        isPlaying = true;
-                    } else {
-                        player.pause();
-                    }
-                });
-
-                players.push(player);
+            player.addEventListener(Twitch.Player.PLAYING, () => {
+                if (isLoading) {
+                    setLoadingState(false);
+                    isPlaying = true;
+                    resetSwapTimer();
+                }
             });
 
             updateCurrentVodDisplay();
@@ -1499,9 +1461,7 @@
                 const effectiveDuration = getEffectiveDuration(vod);
                 const durationText = effectiveDuration === 0 ? 'Skip' : formatTimeReadable(effectiveDuration);
 
-                const readyClass = playerReady[i] ? 'ready' : '';
                 btn.innerHTML = `
-                    <span class="ready-indicator ${readyClass}"></span>
                     <span>${vod.label}</span>
                     <span class="vod-btn-duration">${durationText}</span>
                 `;
@@ -1510,17 +1470,8 @@
             });
         }
 
-        function updateVodButtonReadyState(index, ready) {
-            const btn = document.getElementById(`vod-btn-${index}`);
-            if (btn) {
-                const indicator = btn.querySelector('.ready-indicator');
-                if (indicator) {
-                    indicator.classList.toggle('ready', ready);
-                }
-            }
-        }
-
         function setLoadingState(loading) {
+            isLoading = loading;
             const badge = document.getElementById('currentVodBadge');
             if (loading) {
                 badge.textContent = 'Loading...';
@@ -1531,58 +1482,31 @@
             }
         }
 
+        // SIMPLIFIED: Use setVideo() to switch VODs
         function switchToVod(index) {
-            if (index === currentVodIndex || index >= players.length) return;
+            if (index === currentVodIndex || index >= vods.length || !player) return;
 
-            const currentPlayer = players[currentVodIndex];
-            const currentVodOffset = vods[currentVodIndex].offset;
-
-            let switchMasterTime = masterTime;
+            // Get current master time from playing video
             try {
-                const currentTime = currentPlayer.getCurrentTime();
-                switchMasterTime = currentTime - currentVodOffset;
+                const currentTime = player.getCurrentTime();
+                const currentOffset = vods[currentVodIndex].offset;
+                masterTime = currentTime - currentOffset;
             } catch (e) {
                 console.log('Could not get current time, using tracked master time');
             }
 
-            currentPlayer.pause();
-            currentPlayer.setMuted(true);
-
-            document.querySelectorAll('.player-wrapper').forEach(w => w.classList.remove('active'));
-            document.getElementById(`player-wrapper-${index}`).classList.add('active');
-
             currentVodIndex = index;
+            const vod = vods[index];
+            const newTime = Math.max(0, masterTime + vod.offset);
+
+            setLoadingState(true);
+
+            // Use setVideo to switch to new VOD
+            player.setVideo('v' + vod.vodId, newTime);
+
             updateCurrentVodDisplay();
             updateFullscreenVodButtons();
             updateOffsetDisplay();
-
-            if (playerReady[index]) {
-                completeSwitchToVod(index, switchMasterTime);
-            } else {
-                pendingSwitch = { index, masterTimeAtSwitch: switchMasterTime };
-                setLoadingState(true);
-                showStatus('Waiting for player to load...', 'success');
-            }
-        }
-
-        function completeSwitchToVod(index, switchMasterTime) {
-            setLoadingState(false);
-
-            masterTime = switchMasterTime;
-
-            const newPlayer = players[index];
-            const newOffset = vods[index].offset;
-            const newTime = masterTime + newOffset;
-
-            newPlayer.seek(newTime);
-            newPlayer.setMuted(false);
-
-            setTimeout(() => {
-                newPlayer.play();
-                isPlaying = true;
-            }, 150);
-
-            resetSwapTimer();
         }
 
         function findNextVodIndex() {
@@ -1631,14 +1555,13 @@
         }
 
         function adjustOffset(delta) {
-            if (!vods[currentVodIndex]) return;
+            if (!vods[currentVodIndex] || !player) return;
 
             vods[currentVodIndex].offset += delta;
             vods[currentVodIndex].offsetRaw = formatTimeReadable(vods[currentVodIndex].offset);
 
-            const currentPlayer = players[currentVodIndex];
             const newTime = masterTime + vods[currentVodIndex].offset;
-            currentPlayer.seek(Math.max(0, newTime));
+            player.seek(Math.max(0, newTime));
 
             updateOffsetDisplay();
 
@@ -1655,14 +1578,13 @@
                 return;
             }
 
-            if (!vods[currentVodIndex]) return;
+            if (!vods[currentVodIndex] || !player) return;
 
             vods[currentVodIndex].offset = newOffset;
             vods[currentVodIndex].offsetRaw = formatTimeReadable(newOffset);
 
-            const currentPlayer = players[currentVodIndex];
             const newTime = masterTime + vods[currentVodIndex].offset;
-            currentPlayer.seek(Math.max(0, newTime));
+            player.seek(Math.max(0, newTime));
 
             updateOffsetDisplay();
             input.value = '';
@@ -1703,9 +1625,8 @@
 
             timeUpdateInterval = setInterval(() => {
                 try {
-                    const currentPlayer = players[currentVodIndex];
-                    if (currentPlayer && isPlaying && playerReady[currentVodIndex]) {
-                        const currentTime = currentPlayer.getCurrentTime();
+                    if (player && isPlaying && playerReady && !isLoading) {
+                        const currentTime = player.getCurrentTime();
                         const currentOffset = vods[currentVodIndex].offset;
                         masterTime = currentTime - currentOffset;
                     }
@@ -1751,7 +1672,7 @@
             updateSwapTimerDisplay(formatCountdown(swapCountdown));
 
             swapTimerInterval = setInterval(() => {
-                if (!isPlaying) return;
+                if (!isPlaying || isLoading) return;
 
                 swapCountdown--;
                 updateSwapTimerDisplay(formatCountdown(swapCountdown));
@@ -1789,7 +1710,7 @@
             if (autoSwapEnabled && swapTimerInterval) {
                 clearInterval(swapTimerInterval);
                 swapTimerInterval = setInterval(() => {
-                    if (!isPlaying) return;
+                    if (!isPlaying || isLoading) return;
 
                     swapCountdown--;
                     updateSwapTimerDisplay(formatCountdown(swapCountdown));
@@ -1807,32 +1728,35 @@
         }
 
         function seekRelative(seconds) {
+            if (!player) return;
+
             masterTime += seconds;
             if (masterTime < 0) masterTime = 0;
 
-            const currentPlayer = players[currentVodIndex];
             const newTime = masterTime + vods[currentVodIndex].offset;
-            currentPlayer.seek(newTime);
+            player.seek(newTime);
         }
 
         function seekToMasterTime() {
+            if (!player) return;
+
             const input = document.getElementById('seekToTime');
             const newTime = parseTime(input.value);
             if (newTime !== null && newTime >= 0) {
                 masterTime = newTime;
-                const currentPlayer = players[currentVodIndex];
-                currentPlayer.seek(masterTime + vods[currentVodIndex].offset);
+                player.seek(masterTime + vods[currentVodIndex].offset);
             }
             input.value = '';
         }
 
         function togglePlayPause() {
-            const currentPlayer = players[currentVodIndex];
+            if (!player) return;
+
             if (isPlaying) {
-                currentPlayer.pause();
+                player.pause();
                 isPlaying = false;
             } else {
-                currentPlayer.play();
+                player.play();
                 isPlaying = true;
             }
         }
