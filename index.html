@@ -1098,6 +1098,7 @@
         let vods = [];
         let players = [];
         let playerReady = [];
+        let qualityApplied = [];
         let pendingSwitch = null;
         let currentVodIndex = 0;
         let masterTime = 0;
@@ -1490,16 +1491,6 @@
             }
         }
 
-        function applyQuality(player) {
-            if (selectedQuality !== 'auto') {
-                try {
-                    player.setQuality(selectedQuality);
-                } catch (e) {
-                    console.log('Could not set quality:', e);
-                }
-            }
-        }
-
         function createPlayers() {
             const container = document.getElementById('playerContainer');
 
@@ -1508,6 +1499,7 @@
 
             players = [];
             playerReady = [];
+            qualityApplied = [];
             pendingSwitch = null;
 
             vods.forEach((vod, i) => {
@@ -1517,6 +1509,7 @@
                 container.insertBefore(wrapper, document.getElementById('overlayIndicator'));
 
                 playerReady.push(false);
+                qualityApplied.push(false);
 
                 const player = new Twitch.Player(`player-wrapper-${i}`, {
                     video: vod.vodId,
@@ -1543,9 +1536,16 @@
                     }
                 });
 
-                // Apply quality when playback starts
+                // Apply quality when playback starts (only once per player)
                 player.addEventListener(Twitch.Player.PLAYING, () => {
-                    applyQuality(player);
+                    if (!qualityApplied[i] && selectedQuality !== 'auto') {
+                        qualityApplied[i] = true;
+                        try {
+                            player.setQuality(selectedQuality);
+                        } catch (e) {
+                            console.log('Could not set quality:', e);
+                        }
+                    }
                 });
 
                 players.push(player);
@@ -1642,9 +1642,6 @@
 
             newPlayer.seek(newTime);
             newPlayer.setMuted(false);
-
-            // Apply selected quality
-            applyQuality(newPlayer);
 
             setTimeout(() => {
                 newPlayer.play();
