@@ -251,6 +251,18 @@
             padding: 5px 15px;
             border-radius: 4px;
             font-weight: 600;
+            min-width: 90px;
+            text-align: center;
+        }
+
+        .current-vod-badge.loading {
+            background: #ff9147;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .current-vod-duration {
@@ -320,6 +332,7 @@
             flex-direction: column;
             align-items: center;
             gap: 2px;
+            position: relative;
         }
 
         .vod-btn:hover {
@@ -340,6 +353,20 @@
 
         .vod-btn.active .vod-btn-duration {
             opacity: 0.9;
+        }
+
+        .vod-btn .ready-indicator {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3a3a3d;
+        }
+
+        .vod-btn .ready-indicator.ready {
+            background: #4ade80;
         }
 
         .auto-swap-controls {
@@ -619,9 +646,11 @@
         // State
         let vods = [];
         let players = [];
+        let playerReady = [];  // Track ready state for each player
+        let pendingSwitch = null;  // Queue for pending switch if player not ready
         let currentVodIndex = 0;
         let masterTime = 0;
-        let defaultDuration = 300; // 5 minutes default
+        let defaultDuration = 300;
         let autoSwapEnabled = false;
         let swapTimerInterval = null;
         let timeUpdateInterval = null;
@@ -631,11 +660,6 @@
 
         /**
          * Parse a time string into seconds
-         * Supports formats:
-         *   - Plain number: "90" -> 90 seconds
-         *   - MM:SS: "1:30" -> 90 seconds
-         *   - HH:MM:SS: "1:25:03" -> 5103 seconds
-         *   - Negative values: "-1:30" -> -90 seconds
          */
         function parseTime(input) {
             if (input === null || input === undefined) return null;
@@ -643,28 +667,22 @@
             const str = String(input).trim();
             if (str === '') return null;
 
-            // Check for negative
             const isNegative = str.startsWith('-');
             const cleanStr = isNegative ? str.substring(1) : str;
 
             let seconds = 0;
 
             if (cleanStr.includes(':')) {
-                // Time format: could be MM:SS or HH:MM:SS
                 const parts = cleanStr.split(':').map(p => parseFloat(p) || 0);
 
                 if (parts.length === 2) {
-                    // MM:SS
                     seconds = parts[0] * 60 + parts[1];
                 } else if (parts.length === 3) {
-                    // HH:MM:SS
                     seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
                 } else {
-                    // Invalid format, try to parse as plain number
                     seconds = parseFloat(cleanStr) || 0;
                 }
             } else {
-                // Plain seconds
                 seconds = parseFloat(cleanStr) || 0;
             }
 
@@ -673,7 +691,6 @@
 
         /**
          * Format seconds into a readable time string
-         * Outputs HH:MM:SS or MM:SS depending on length
          */
         function formatTimeReadable(seconds) {
             if (seconds === null || seconds === undefined) return '';
@@ -697,7 +714,6 @@
             return isNegative ? `-${result}` : result;
         }
 
-        // Initialize from URL params or with default entries
         function init() {
             const params = new URLSearchParams(window.location.search);
 
@@ -749,7 +765,6 @@
             const labelPlaceholder = `e.g., Streamer${vodCount}`;
             const durationPlaceholder = "empty = default";
 
-            // Format offset for display if it's a number from URL
             const offsetDisplay = typeof offset === 'number' ? formatTimeReadable(offset) : offset;
             const durationDisplay = typeof duration === 'number' ? formatTimeReadable(duration) : duration;
 
@@ -793,7 +808,6 @@
                 const duration = durationRaw === '' ? null : (parseTime(durationRaw) ?? null);
                 const label = entry.querySelector('.vod-label').value.trim() || `VOD ${i + 1}`;
 
-                // Store raw values for URL generation
                 if (vodId) {
                     config.push({ 
                         vodId, 
@@ -813,12 +827,6 @@
                 return vod.duration;
             }
             return defaultDuration;
-        }
-
-        function formatDurationDisplay(seconds) {
-            if (seconds === 0) return 'Skip';
-            if (seconds === null) return formatTimeReadable(defaultDuration);
-            return formatTimeReadable(seconds);
         }
 
         function startPlayer() {
@@ -852,12 +860,16 @@
             const container = document.getElementById('playerContainer');
             container.innerHTML = '';
             players = [];
+            playerReady = [];  // Reset ready states
+            pendingSwitch = null;  // Clear any pending switch
 
             vods.forEach((vod, i) => {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'player-wrapper' + (i === 0 ? ' active' : '');
                 wrapper.id = `player-wrapper-${i}`;
                 container.appendChild(wrapper);
+
+                playerReady.push(false);  // Initially not ready
 
                 const player = new Twitch.Player(`player-wrapper-${i}`, {
                     video: vod.vodId,
@@ -869,11 +881,20 @@
                 });
 
                 player.addEventListener(Twitch.Player.READY, () => {
-                    if (i === 0) {
+                    playerReady[i] = true;
+                    updateVodButtonReadyState(i, true);
+
+                    // Check if there's a pending switch to this player
+                    if (pendingSwitch && pendingSwitch.index === i) {
+                        completeSwitchToVod(pendingSwitch.index, pendingSwitch.masterTimeAtSwitch);
+                        pendingSwitch = null;
+                    } else if (i === 0) {
+                        // First player - start playback
                         player.seek(masterTime + vod.offset);
                         player.play();
                         isPlaying = true;
                     } else {
+                        // Secondary player with no pending switch - keep paused
                         player.pause();
                     }
                 });
@@ -891,9 +912,14 @@
             vods.forEach((vod, i) => {
                 const btn = document.createElement('button');
                 btn.className = 'vod-btn' + (i === 0 ? ' active' : '');
+                btn.id = `vod-btn-${i}`;
                 const effectiveDuration = getEffectiveDuration(vod);
                 const durationText = effectiveDuration === 0 ? 'Skip' : formatTimeReadable(effectiveDuration);
+
+                // Add ready indicator dot
+                const readyClass = playerReady[i] ? 'ready' : '';
                 btn.innerHTML = `
+                    <span class="ready-indicator ${readyClass}"></span>
                     <span>${vod.label}</span>
                     <span class="vod-btn-duration">${durationText}</span>
                 `;
@@ -902,24 +928,69 @@
             });
         }
 
+        function updateVodButtonReadyState(index, ready) {
+            const btn = document.getElementById(`vod-btn-${index}`);
+            if (btn) {
+                const indicator = btn.querySelector('.ready-indicator');
+                if (indicator) {
+                    indicator.classList.toggle('ready', ready);
+                }
+            }
+        }
+
+        function setLoadingState(loading) {
+            const badge = document.getElementById('currentVodBadge');
+            if (loading) {
+                badge.textContent = 'Loading...';
+                badge.classList.add('loading');
+            } else {
+                badge.textContent = `VOD ${currentVodIndex + 1}`;
+                badge.classList.remove('loading');
+            }
+        }
+
         function switchToVod(index) {
             if (index === currentVodIndex || index >= players.length) return;
 
+            // Get current master time from active player
             const currentPlayer = players[currentVodIndex];
             const currentVodOffset = vods[currentVodIndex].offset;
 
+            let switchMasterTime = masterTime;
             try {
                 const currentTime = currentPlayer.getCurrentTime();
-                masterTime = currentTime - currentVodOffset;
+                switchMasterTime = currentTime - currentVodOffset;
             } catch (e) {
                 console.log('Could not get current time, using tracked master time');
             }
 
+            // Pause and mute current player
             currentPlayer.pause();
             currentPlayer.setMuted(true);
 
+            // Hide current wrapper, show new wrapper
             document.querySelectorAll('.player-wrapper').forEach(w => w.classList.remove('active'));
             document.getElementById(`player-wrapper-${index}`).classList.add('active');
+
+            // Update current index for UI
+            currentVodIndex = index;
+            updateCurrentVodDisplay();
+
+            if (playerReady[index]) {
+                // Player is ready - complete switch immediately
+                completeSwitchToVod(index, switchMasterTime);
+            } else {
+                // Player not ready - queue the switch and show loading
+                pendingSwitch = { index, masterTimeAtSwitch: switchMasterTime };
+                setLoadingState(true);
+                showStatus('Waiting for player to load...', 'success');
+            }
+        }
+
+        function completeSwitchToVod(index, switchMasterTime) {
+            setLoadingState(false);
+
+            masterTime = switchMasterTime;
 
             const newPlayer = players[index];
             const newOffset = vods[index].offset;
@@ -932,8 +1003,6 @@
                 newPlayer.play();
             }
 
-            currentVodIndex = index;
-            updateCurrentVodDisplay();
             resetSwapTimer();
         }
 
@@ -954,7 +1023,11 @@
         }
 
         function updateCurrentVodDisplay() {
-            document.getElementById('currentVodBadge').textContent = `VOD ${currentVodIndex + 1}`;
+            const badge = document.getElementById('currentVodBadge');
+            // Only update if not in loading state
+            if (!badge.classList.contains('loading')) {
+                badge.textContent = `VOD ${currentVodIndex + 1}`;
+            }
             document.getElementById('currentVodLabel').textContent = vods[currentVodIndex]?.label || '';
 
             const effectiveDuration = getEffectiveDuration(vods[currentVodIndex]);
@@ -1002,7 +1075,7 @@
             timeUpdateInterval = setInterval(() => {
                 try {
                     const currentPlayer = players[currentVodIndex];
-                    if (currentPlayer && isPlaying) {
+                    if (currentPlayer && isPlaying && playerReady[currentVodIndex]) {
                         const currentTime = currentPlayer.getCurrentTime();
                         const currentOffset = vods[currentVodIndex].offset;
                         masterTime = currentTime - currentOffset;
@@ -1167,7 +1240,6 @@
             setTimeout(() => el.classList.add('hidden'), 3000);
         }
 
-        // Initialize on load
         init();
     </script>
 </body>
