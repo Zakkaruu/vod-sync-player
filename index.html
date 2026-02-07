@@ -1876,9 +1876,13 @@
             masterTime += seconds;
             if (masterTime < 0) masterTime = 0;
 
-            const currentPlayer = players[currentVodIndex];
-            const newTime = masterTime + vods[currentVodIndex].offset;
-            currentPlayer.seek(newTime);
+            // Seek ALL players to their correct positions (with their offsets)
+            players.forEach((player, i) => {
+                if (playerReady[i]) {
+                    const seekTime = masterTime + vods[i].offset;
+                    player.seek(Math.max(0, seekTime));
+                }
+            });
         }
 
         function seekToMasterTime() {
@@ -1886,8 +1890,14 @@
             const newTime = parseTime(input.value);
             if (newTime !== null && newTime >= 0) {
                 masterTime = newTime;
-                const currentPlayer = players[currentVodIndex];
-                currentPlayer.seek(masterTime + vods[currentVodIndex].offset);
+
+                // Seek ALL players to their correct positions (with their offsets)
+                players.forEach((player, i) => {
+                    if (playerReady[i]) {
+                        const seekTime = masterTime + vods[i].offset;
+                        player.seek(Math.max(0, seekTime));
+                    }
+                });
             }
             input.value = '';
         }
